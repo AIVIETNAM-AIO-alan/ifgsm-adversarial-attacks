@@ -38,18 +38,22 @@ def fgsm_attack(
         adv_images: ảnh đối kháng  [B, C, H, W]
     """
     images = images.clone().detach()
+    # Chuẩn bị — cho phép tính gradient theo pixel
     images.requires_grad = True
 
+    # Forward pass — tính loss như lúc train bình thường
     outputs = model(images)
     loss    = F.cross_entropy(outputs, labels)
 
     model.zero_grad()
-    loss.backward()
 
-    grad_sign = images.grad.data.sign()
+    # Backward pass — lấy gradient của loss theo pixel
+    loss.backward()
+    grad_sign = images.grad.data.sign() # ← chỉ lấy DẤU (+1 hoặc -1)
 
     # Targeted: đi ngược chiều gradient (giảm loss)
     direction = -1 if targeted else 1
+    # Tạo nhiễu — đẩy pixel theo hướng làm tăng loss
     adv_images = images + direction * epsilon * grad_sign
     adv_images = torch.clamp(adv_images, clip_min, clip_max)
 
