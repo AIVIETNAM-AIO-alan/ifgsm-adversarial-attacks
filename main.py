@@ -33,9 +33,9 @@ def parse_args():
     )
     parser.add_argument("--config",     type=str, default="configs/config.yaml")
     parser.add_argument(
-        "--datasets", nargs="+", default=["MNIST", "CIFAR10"],
-        metavar="DS",
-        help="Dataset(s) cần chạy: MNIST | CIFAR10 (mặc định: cả hai)",
+        "--dataset", type=str, default="MNIST",
+        choices=["MNIST", "CIFAR10", "both"],
+        help="Dataset để chạy: MNIST | CIFAR10 | both (mặc định: MNIST)",
     )
     parser.add_argument("--skip-train", action="store_true",
                         help="Bỏ qua bước train (cần checkpoint có sẵn)")
@@ -72,14 +72,16 @@ def main():
     for d in ["results/figures", "results/logs", "results/checkpoints"]:
         os.makedirs(d, exist_ok=True)
 
+    datasets_to_run = ["MNIST", "CIFAR10"] if args.dataset == "both" else [args.dataset]
+
     print_header("I-FGSM Adversarial Attack Project")
-    print(f"  Datasets : {args.datasets}")
+    print(f"  Dataset  : {args.dataset}")
     print(f"  Epsilon  : {cfg['attack']['epsilon']}")
     print(f"  Steps    : {cfg['attack']['num_steps']}")
     print(f"  Flow     : train → lọc mẫu đúng → FGSM + I-FGSM")
 
     # ── Vòng lặp qua từng dataset ─────────────────────────────
-    for ds_name in args.datasets:
+    for ds_name in datasets_to_run:
         print_header(f"Dataset: {ds_name}")
 
         # ── 1. Train ──────────────────────────────────────────
