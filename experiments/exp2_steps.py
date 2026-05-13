@@ -3,13 +3,19 @@ experiments/exp2_steps.py
 ─────────────────────────────────────────────────────────────
 Thí nghiệm 2: Khảo sát ảnh hưởng của số bước lặp T
 
+Flow:
+  1. Load model checkpoint
+  2. Dự đoán test set → lọc mẫu đúng (clean correct)
+  3. Tấn công I-FGSM trên mẫu đúng với từng num_steps
+  4. So sánh accuracy giảm theo số bước
+
 Câu hỏi nghiên cứu:
   - Bao nhiêu bước thì I-FGSM "hội tụ"?
   - Thêm bước có luôn làm tăng attack strength?
 
 Kết quả kỳ vọng:
   - Accuracy giảm nhanh từ T=1→10, chậm dần sau T=20
-  - Sau một ngưỡng nào đó, thêm bước không có tác dụng nhiều
+  - Sau một ngưỡng nào đó, thêm bước không còn hiệu quả nhiều
 """
 
 import sys, os
@@ -26,40 +32,47 @@ from utils.evaluator     import AdversarialEvaluator
 from utils.visualization import plot_accuracy_vs_steps
 
 
-def run(config_path: str = "../configs/config.yaml"):
+def run(config_path: str = "../configs/config.yaml", dataset: str = None):
     with open(config_path) as f:
         cfg = yaml.safe_load(f)
+
+    if dataset:
+        cfg["dataset"]["name"] = dataset
 
     device = torch.device(
         cfg["experiment"]["device"] if torch.cuda.is_available() else "cpu"
     )
-    print(f"[Exp2] Device: {device}")
+    ds_name = cfg["dataset"]["name"]
+    print(f"[Exp2] Dataset: {ds_name} | Device: {device}")
 
-    ds_name    = cfg["dataset"]["name"]
+    # ── Load model ────────────────────────────────────────────
     in_ch      = get_in_channels(ds_name)
     input_size = get_input_size(ds_name)
-
-    model = SimpleCNN(in_channels=in_ch, num_classes=10, input_size=input_size)
+    model      = SimpleCNN(in_channels=in_ch, num_classes=10, input_size=input_size)
 
     ckpt_path = os.path.join(
         cfg["train"]["save_dir"],
         f"{ds_name.lower()}_best.pth"
     )
     if not os.path.exists(ckpt_path):
-        print(f"  [WARNING] Không tìm thấy checkpoint. Chạy train.py trước!"); return
+        print(f"  [WARNING] Không tìm thấy checkpoint. Chạy train.py --dataset {ds_name} trước!")
+        return
 
     ckpt = torch.load(ckpt_path, map_location=device)
     model.load_state_dict(ckpt["model_state"])
     model = model.to(device)
+    print(f"  Loaded checkpoint: {ckpt_path}")
 
+    # ── Load test data ────────────────────────────────────────
     _, _, test_loader = get_dataloaders(
         ds_name,
         root       = cfg["dataset"]["root"],
         batch_size = cfg["dataset"]["batch_size"],
     )
 
-    evaluator = AdversarialEvaluator(model, device=device)
-    epsilon   = cfg["attack"]["epsilon"]
+    # ── Đánh giá (flow 2 pha) ─────────────────────────────────
+    evaluator  = AdversarialEvaluator(model, device=device)
+    epsilon    = cfg["attack"]["epsilon"]
     steps_list = cfg["experiment"]["steps_list"]
 
     results = evaluator.evaluate_steps(
@@ -69,16 +82,25 @@ def run(config_path: str = "../configs/config.yaml"):
         max_batches = 20,
     )
 
-    os.makedirs(os.path.join(ROOT, "results", "logs"), exist_ok=True)
-    with open(os.path.join(ROOT, "results", "logs", f"exp2_steps_{ds_name.lower()}.json"), "w") as f:
+    # ── Lưu kết quả ──────────────────────────────────────────
+    log_dir = os.path.join(ROOT, "results", "logs")
+    os.makedirs(log_dir, exist_ok=True)
+    log_path = os.path.join(log_dir, f"exp2_steps_{ds_name.lower()}.json")
+    with open(log_path, "w") as f:
         json.dump(results, f, indent=2)
+    print(f"  Saved log: {log_path}")
 
+    # ── Vẽ biểu đồ ───────────────────────────────────────────
+    fig_dir = os.path.join(ROOT, "results", "figures")
+    os.makedirs(fig_dir, exist_ok=True)
     plot_accuracy_vs_steps(
-        results, epsilon=epsilon,
-        save_path=os.path.join(ROOT, "results", "figures", f"exp2_acc_vs_steps_{ds_name.lower()}.png")
+        results,
+        epsilon      = epsilon,
+        dataset_name = ds_name,
+        save_path    = os.path.join(fig_dir, f"exp2_acc_vs_steps_{ds_name.lower()}.png"),
     )
 
-    print("\n[Exp2] Hoàn tất!")
+    print(f"\n[Exp2 — {ds_name}] Hoàn tất!")
 
 
 if __name__ == "__main__":

@@ -39,15 +39,16 @@ def _label_name(idx: int, class_names: Optional[List[str]] = None) -> str:
 # ─────────────────────────────────────────────────────────────
 
 def plot_adversarial_examples(
-    original    : torch.Tensor,
-    adversarial : torch.Tensor,
-    orig_labels : List[int],
-    adv_labels  : List[int],
-    epsilon     : float,
-    num_steps   : int,
-    class_names : Optional[List[str]] = None,
-    n_cols      : int   = 5,
-    save_path   : Optional[str] = None,
+    original     : torch.Tensor,
+    adversarial  : torch.Tensor,
+    orig_labels  : List[int],
+    adv_labels   : List[int],
+    epsilon      : float,
+    num_steps    : int,
+    class_names  : Optional[List[str]] = None,
+    dataset_name : str                 = "",
+    n_cols       : int                 = 5,
+    save_path    : Optional[str]       = None,
 ) -> None:
     """
     Vẽ lưới ảnh: mỗi cột 1 mẫu, mỗi hàng 1 loại (gốc / nhiễu / đối kháng).
@@ -68,9 +69,11 @@ def plot_adversarial_examples(
     is_gray = (original.shape[1] == 1)
 
     fig, axes = plt.subplots(3, n, figsize=(2.5 * n, 7))
+    ds_title = f" — {dataset_name}" if dataset_name else ""
     fig.suptitle(
-        f"I-FGSM Attack  |  ε={epsilon}  |  steps={num_steps}",
-        fontsize=14, fontweight="bold", y=1.01
+        f"I-FGSM Attack{ds_title}  |  ε={epsilon}  |  steps={num_steps}"
+        f"\n(Chỉ tấn công mẫu dự đoán đúng)",
+        fontsize=12, fontweight="bold", y=1.02,
     )
 
     row_titles = ["Ảnh gốc", "Nhiễu (×10)", "Ảnh đối kháng"]
@@ -115,32 +118,64 @@ def plot_adversarial_examples(
 # ─────────────────────────────────────────────────────────────
 
 def plot_accuracy_vs_epsilon(
-    results    : List[Dict],
-    save_path  : Optional[str] = None,
+    results      : List[Dict],
+    dataset_name : str           = "",
+    save_path    : Optional[str] = None,
 ) -> None:
     """
     Vẽ đường Clean / FGSM / I-FGSM accuracy theo epsilon.
+    Clean accuracy là đường ngang cố định (baseline).
+    FGSM và I-FGSM là accuracy sau tấn công trên mẫu đúng.
 
     Args:
-        results : output của AdversarialEvaluator.evaluate_epsilon_range()
+        results      : output của AdversarialEvaluator.evaluate_epsilon_range()
+        dataset_name : tên dataset để hiển thị trên tiêu đề
     """
     epsilons   = [r["epsilon"]   for r in results]
     clean_accs = [r["clean_acc"] for r in results]
     fgsm_accs  = [r["fgsm_acc"]  for r in results]
     ifgsm_accs = [r["ifgsm_acc"] for r in results]
 
+    # clean_acc không đổi theo epsilon — lấy giá trị đầu tiên
+    clean_baseline = clean_accs[0] if clean_accs else 0.0
+    n_correct  = results[0].get("n_correct", "?") if results else "?"
+    total_test = results[0].get("total_test", "?") if results else "?"
+
     fig, ax = plt.subplots(figsize=(8, 5))
 
-    ax.plot(epsilons, clean_accs, "o--", color="steelblue",
-            label="Clean", linewidth=2, markersize=7)
-    ax.plot(epsilons, fgsm_accs,  "s-",  color="orange",
-            label="FGSM (1 step)", linewidth=2, markersize=7)
-    ax.plot(epsilons, ifgsm_accs, "^-",  color="red",
+    # Clean: đường ngang (baseline)
+    ax.axhline(
+        clean_baseline, color="steelblue", linestyle="--", linewidth=2,
+        label=f"Clean ({clean_baseline:.1f}%)",
+    )
+    ax.plot(epsilons, fgsm_accs,  "s-", color="orange",
+            label="FGSM (1 bước)", linewidth=2, markersize=7)
+    ax.plot(epsilons, ifgsm_accs, "^-", color="red",
             label="I-FGSM", linewidth=2.5, markersize=8)
 
+    # Annotate drop tại epsilon lớn nhất
+    if results:
+        last = results[-1]
+        ax.annotate(
+            f"↓{last['ifgsm_drop']:.1f}%",
+            xy=(last["epsilon"], last["ifgsm_acc"]),
+            xytext=(0, -18), textcoords="offset points",
+            ha="center", fontsize=9, color="red",
+        )
+
+    ds_title = f" — {dataset_name}" if dataset_name else ""
     ax.set_xlabel("Epsilon (ε)", fontsize=12)
     ax.set_ylabel("Accuracy (%)", fontsize=12)
-    ax.set_title("Accuracy vs Epsilon", fontsize=14, fontweight="bold")
+    ax.set_title(
+        f"Accuracy vs Epsilon{ds_title}",
+        fontsize=14, fontweight="bold",
+    )
+    ax.set_subtitle = None  # matplotlib không có subtitle native
+    fig.text(
+        0.5, 0.91,
+        f"Tấn công trên {n_correct}/{total_test} mẫu dự đoán đúng",
+        ha="center", fontsize=9, color="gray",
+    )
     ax.legend(fontsize=11)
     ax.grid(True, alpha=0.3)
     ax.set_ylim(0, 105)
@@ -155,28 +190,52 @@ def plot_accuracy_vs_epsilon(
 # ─────────────────────────────────────────────────────────────
 
 def plot_accuracy_vs_steps(
-    results   : List[Dict],
-    epsilon   : float,
-    save_path : Optional[str] = None,
+    results      : List[Dict],
+    epsilon      : float,
+    dataset_name : str           = "",
+    save_path    : Optional[str] = None,
 ) -> None:
     """
     Vẽ I-FGSM accuracy khi thay đổi num_steps.
+    Thêm đường ngang clean_acc làm baseline tham chiếu.
     """
     steps = [r["num_steps"] for r in results]
     accs  = [r["adv_acc"]   for r in results]
 
+    clean_baseline = results[0].get("clean_acc") if results else None
+    n_correct  = results[0].get("n_correct",  "?") if results else "?"
+    total_test = results[0].get("total_test", "?") if results else "?"
+
     fig, ax = plt.subplots(figsize=(7, 4))
-    ax.plot(steps, accs, "^-", color="red", linewidth=2.5, markersize=8)
+
+    # Đường ngang clean accuracy
+    if clean_baseline is not None:
+        ax.axhline(
+            clean_baseline, color="steelblue", linestyle="--", linewidth=1.8,
+            label=f"Clean ({clean_baseline:.1f}%)",
+        )
+
+    ax.plot(steps, accs, "^-", color="red", linewidth=2.5, markersize=8,
+            label="I-FGSM (adv acc)")
 
     for x, y in zip(steps, accs):
         ax.annotate(f"{y:.1f}%", (x, y), textcoords="offset points",
                     xytext=(0, 8), ha="center", fontsize=9)
 
+    ds_title = f" — {dataset_name}" if dataset_name else ""
     ax.set_xlabel("Số bước lặp (T)", fontsize=12)
-    ax.set_ylabel("Adversarial Accuracy (%)", fontsize=12)
-    ax.set_title(f"I-FGSM: Accuracy vs Số bước lặp  (ε={epsilon})",
-                 fontsize=13, fontweight="bold")
+    ax.set_ylabel("Accuracy (%)", fontsize=12)
+    ax.set_title(
+        f"I-FGSM: Accuracy vs Số bước lặp  (ε={epsilon}){ds_title}",
+        fontsize=12, fontweight="bold",
+    )
+    fig.text(
+        0.5, 0.91,
+        f"Tấn công trên {n_correct}/{total_test} mẫu dự đoán đúng",
+        ha="center", fontsize=9, color="gray",
+    )
     ax.set_xticks(steps)
+    ax.legend(fontsize=10)
     ax.grid(True, alpha=0.3)
 
     plt.tight_layout()

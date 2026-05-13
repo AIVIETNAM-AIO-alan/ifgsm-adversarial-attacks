@@ -3,10 +3,16 @@ experiments/exp1_epsilon.py
 ─────────────────────────────────────────────────────────────
 Thí nghiệm 1: Khảo sát ảnh hưởng của Epsilon lên Accuracy
 
+Flow:
+  1. Load model checkpoint
+  2. Dự đoán test set → lọc mẫu đúng (clean correct)
+  3. Tấn công FGSM + I-FGSM trên mẫu đúng với từng epsilon
+  4. So sánh accuracy giảm bao nhiêu
+
 Kết quả kỳ vọng:
   - Accuracy giảm khi ε tăng
-  - I-FGSM luôn mạnh hơn FGSM 1 bước
-  - Với ε đủ lớn, accuracy về ~10% (random guess cho 10 classes)
+  - I-FGSM luôn mạnh hơn FGSM
+  - Với ε đủ lớn, accuracy về ~0% (trên mẫu đã đúng)
 """
 
 import sys, os
@@ -23,36 +29,37 @@ from utils.evaluator   import AdversarialEvaluator
 from utils.visualization import plot_accuracy_vs_epsilon
 
 
-def run(config_path: str = "../configs/config.yaml"):
+def run(config_path: str = "../configs/config.yaml", dataset: str = None):
     with open(config_path) as f:
         cfg = yaml.safe_load(f)
+
+    if dataset:
+        cfg["dataset"]["name"] = dataset
 
     device = torch.device(
         cfg["experiment"]["device"] if torch.cuda.is_available() else "cpu"
     )
-    print(f"[Exp1] Device: {device}")
+    ds_name = cfg["dataset"]["name"]
+    print(f"[Exp1] Dataset: {ds_name} | Device: {device}")
 
     # ── Load model ────────────────────────────────────────────
-    ds_name    = cfg["dataset"]["name"]
     in_ch      = get_in_channels(ds_name)
     input_size = get_input_size(ds_name)
-
-    model = SimpleCNN(in_channels=in_ch, num_classes=10, input_size=input_size)
+    model      = SimpleCNN(in_channels=in_ch, num_classes=10, input_size=input_size)
 
     ckpt_path = os.path.join(
         cfg["train"]["save_dir"],
         f"{ds_name.lower()}_best.pth"
     )
-    if os.path.exists(ckpt_path):
-        ckpt = torch.load(ckpt_path, map_location=device)
-        model.load_state_dict(ckpt["model_state"])
-        print(f"  Loaded checkpoint: {ckpt_path}")
-    else:
+    if not os.path.exists(ckpt_path):
         print(f"  [WARNING] Không tìm thấy checkpoint: {ckpt_path}")
-        print(f"  Chạy train.py trước!")
+        print(f"  Chạy train.py --dataset {ds_name} trước!")
         return
 
+    ckpt = torch.load(ckpt_path, map_location=device)
+    model.load_state_dict(ckpt["model_state"])
     model = model.to(device)
+    print(f"  Loaded checkpoint: {ckpt_path}")
 
     # ── Load test data ────────────────────────────────────────
     _, _, test_loader = get_dataloaders(
@@ -61,7 +68,7 @@ def run(config_path: str = "../configs/config.yaml"):
         batch_size = cfg["dataset"]["batch_size"],
     )
 
-    # ── Đánh giá ─────────────────────────────────────────────
+    # ── Đánh giá (flow 2 pha) ─────────────────────────────────
     evaluator = AdversarialEvaluator(model, device=device)
 
     eps_list = cfg["experiment"]["epsilon_list"]
@@ -69,21 +76,27 @@ def run(config_path: str = "../configs/config.yaml"):
         loader       = test_loader,
         epsilon_list = eps_list,
         num_steps    = cfg["attack"]["num_steps"],
-        max_batches  = 20,  # giới hạn để chạy nhanh
+        max_batches  = 20,
     )
 
     # ── Lưu kết quả ──────────────────────────────────────────
-    os.makedirs(os.path.join(ROOT, "results", "logs"), exist_ok=True)
-    with open(os.path.join(ROOT, "results", "logs", f"exp1_epsilon_{ds_name.lower()}.json"), "w") as f:
+    log_dir = os.path.join(ROOT, "results", "logs")
+    os.makedirs(log_dir, exist_ok=True)
+    log_path = os.path.join(log_dir, f"exp1_epsilon_{ds_name.lower()}.json")
+    with open(log_path, "w") as f:
         json.dump(results, f, indent=2)
+    print(f"  Saved log: {log_path}")
 
     # ── Vẽ biểu đồ ───────────────────────────────────────────
+    fig_dir = os.path.join(ROOT, "results", "figures")
+    os.makedirs(fig_dir, exist_ok=True)
     plot_accuracy_vs_epsilon(
         results,
-        save_path=os.path.join(ROOT, "results", "figures", f"exp1_acc_vs_epsilon_{ds_name.lower()}.png")
+        dataset_name = ds_name,
+        save_path    = os.path.join(fig_dir, f"exp1_acc_vs_epsilon_{ds_name.lower()}.png"),
     )
 
-    print("\n[Exp1] Hoàn tất!")
+    print(f"\n[Exp1 — {ds_name}] Hoàn tất!")
 
 
 if __name__ == "__main__":
