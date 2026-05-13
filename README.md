@@ -65,12 +65,12 @@ All experiments follow a strict **2-phase evaluation** to measure attack effecti
 ```
 Phase 1 — Predict & Filter
   Feed entire test set through the model (no attack)
-  → Record clean accuracy
+  → Record clean accuracy and n_correct
   → Keep only the samples the model predicted CORRECTLY
 
 Phase 2 — Attack
   Run FGSM and I-FGSM only on the correctly classified samples
-  → Measure how many remain correct after attack
+  → Measure robust accuracy, ASR, perturbation size, and attack time
   → Report absolute accuracy over the full test set
 ```
 
@@ -78,7 +78,17 @@ Phase 2 — Attack
 
 Attacking misclassified samples is meaningless — they are already wrong. This methodology isolates the true attack strength: *of the examples the model gets right, how many can be fooled?*
 
-The reported accuracy numbers use the full test set as the denominator, so clean accuracy and adversarial accuracy are directly comparable on the same scale.
+**Metrics reported for each experiment:**
+
+| Metric | Description |
+|---|---|
+| `clean_acc` | Baseline accuracy before any attack (%) |
+| `fgsm_acc` / `ifgsm_acc` | Accuracy remaining after attack, over full test set (%) |
+| `fgsm_asr` / `ifgsm_asr` | **Attack Success Rate** — % of correctly classified samples that were fooled |
+| `fgsm_drop` / `ifgsm_drop` | Absolute accuracy drop in percentage points |
+| `perturbation_linf` | Max L∞ perturbation magnitude (should equal ε) |
+| `perturbation_l2` | Mean L2 perturbation norm across the batch |
+| `fgsm_time_s` / `ifgsm_time_s` | Wall-clock time of the attack in seconds |
 
 ---
 
@@ -98,13 +108,13 @@ ifgsm_project/
 ├── utils/
 │   ├── data_loader.py        # MNIST / CIFAR-10 dataloaders
 │   ├── trainer.py            # Training loop with checkpoint saving
-│   ├── evaluator.py          # 2-phase adversarial evaluation
-│   └── visualization.py      # Plot generation utilities
+│   ├── evaluator.py          # 2-phase evaluation: filter correct → attack
+│   └── visualization.py      # 5 plot types including probability bar charts
 │
 ├── experiments/
-│   ├── exp1_epsilon.py       # Sweep ε → measure accuracy drop
-│   ├── exp2_steps.py         # Sweep T (num steps) → measure accuracy drop
-│   └── exp3_visualize.py     # Side-by-side clean vs. adversarial images
+│   ├── exp1_epsilon.py       # Sweep ε → accuracy, ASR, timing
+│   ├── exp2_steps.py         # Sweep T → accuracy, ASR, timing  (uses steps_epsilon)
+│   └── exp3_visualize.py     # Images + perturbation + prediction probabilities
 │
 ├── configs/
 │   └── config.yaml           # All hyperparameters in one place
@@ -146,21 +156,22 @@ pip install -r requirements.txt
 
 ## Usage
 
-### Run the full pipeline (both datasets)
+### Run the full pipeline
 
 ```bash
-# Train + run all 3 experiments on MNIST and CIFAR-10
+# Train + run all 3 experiments on MNIST (default)
 python main.py
 
-# Run on a single dataset
-python main.py --datasets MNIST
-python main.py --datasets CIFAR10
+# Choose dataset: MNIST | CIFAR10 | both
+python main.py --dataset MNIST
+python main.py --dataset CIFAR10
+python main.py --dataset both
 
 # Skip training (reuse saved checkpoints)
-python main.py --skip-train
+python main.py --dataset CIFAR10 --skip-train
 
-# Run specific experiments only (e.g., exp 1 and 3) on both datasets
-python main.py --skip-train --exp 1 3
+# Run specific experiments only (e.g., exp 1 and 3)
+python main.py --dataset MNIST --skip-train --exp 1 3
 ```
 
 ### Train only
@@ -181,12 +192,10 @@ python train.py --dataset CIFAR10 --epochs 30 --lr 0.0005
 
 ### Run experiments individually
 
-Each experiment accepts an optional `--dataset` override via the `run()` function:
-
 ```bash
-python experiments/exp1_epsilon.py   # accuracy vs epsilon sweep
-python experiments/exp2_steps.py     # accuracy vs iteration count
-python experiments/exp3_visualize.py # visual comparison
+python experiments/exp1_epsilon.py   # accuracy + ASR + timing vs epsilon
+python experiments/exp2_steps.py     # accuracy + ASR + timing vs num steps
+python experiments/exp3_visualize.py # images + perturbation + prediction probs
 ```
 
 ### Run unit tests
@@ -278,8 +287,6 @@ adv = fgsm_attack(model, images, labels, epsilon=0.3)
 
 ### Targeted attack
 
-For a targeted attack, supply the **target class labels** (not ground truth) and set `targeted=True`. The attack minimizes the loss towards the target class instead of maximizing it away from the true class.
-
 ```python
 target_labels = torch.full_like(labels, fill_value=3)  # fool model into predicting class 3
 attacker = IFGSMAttack(model, epsilon=0.2, num_steps=40, targeted=True)
@@ -333,49 +340,51 @@ Training history (loss and accuracy curves):
 
 ## Experiment Results
 
-> All results use the **2-phase evaluation** described above.
-> FGSM and I-FGSM accuracy are measured over the **full test set** (denominator),
-> but attacks are applied only to the **correctly classified subset**.
+> All results use the **2-phase evaluation**: attacks are applied only to the correctly classified subset.
+> Accuracy values use the full test set as denominator — clean and adversarial numbers are directly comparable.
 
 ---
 
-### Exp 1 — Accuracy vs Epsilon (ε)
+### Exp 1 — Accuracy & ASR vs Epsilon (ε)
 
-Fixed: `T=40` steps. Evaluated on MNIST test set (10,000 total, ~9,945 correctly classified).
+Fixed: `T=40` steps. Evaluated on MNIST test set (10,000 total, 9,945 correctly classified).
 
-| ε | Clean Acc | n\_correct | FGSM Acc | I-FGSM Acc | I-FGSM Drop |
+| ε | Clean Acc | FGSM Acc | FGSM ASR | I-FGSM Acc | I-FGSM ASR |
 |---|---|---|---|---|---|
-| 0.05 | 99.45% | 9,945 | 94.53% | 85.23% | −14.22% |
-| 0.10 | 99.45% | 9,945 | 70.63% | 16.56% | −82.89% |
-| 0.15 | 99.45% | 9,945 | 42.73% | 0.70% | −98.75% |
-| 0.20 | 99.45% | 9,945 | 25.16% | 0.00% | −99.45% |
-| 0.25 | 99.45% | 9,945 | 15.94% | 0.00% | −99.45% |
-| 0.30 | 99.45% | 9,945 | 11.17% | 0.00% | −99.45% |
+| 0.05 | 99.45% | 94.53% | 4.9% | 85.23% | 14.3% |
+| 0.10 | 99.45% | 70.63% | 28.9% | 16.56% | 83.4% |
+| 0.15 | 99.45% | 42.73% | 57.0% | 0.70% | 99.3% |
+| 0.20 | 99.45% | 25.16% | 74.7% | 0.00% | 100.0% |
+| 0.25 | 99.45% | 15.94% | 84.0% | 0.00% | 100.0% |
+| 0.30 | 99.45% | 11.17% | 88.8% | 0.00% | 100.0% |
+
+> **ASR** = % of correctly classified samples successfully fooled by the attack.
 
 **Key takeaways:**
-- Clean accuracy is constant (9,945 correct samples — same pool is attacked at every ε).
-- At `ε=0.10`, I-FGSM drops accuracy from 99.45% → 16.56% vs. FGSM only to 70.63% — 4× larger impact at the same perturbation budget.
-- At `ε=0.20`, I-FGSM achieves **100% attack success rate** (0% accuracy) on the correctly classified pool.
-- FGSM retains ~11% accuracy even at `ε=0.30`, illustrating the saturation limit of single-step attacks.
+- At `ε=0.10`, I-FGSM achieves **83.4% ASR** vs. FGSM's 28.9% — nearly 3× more effective at the same perturbation budget.
+- At `ε=0.20`, I-FGSM reaches **100% ASR**: every correctly classified sample is fooled.
+- FGSM tops out at ~88.8% ASR even at `ε=0.30`, showing the fundamental ceiling of single-step attacks.
 
 ![Exp1 MNIST](results/figures/exp1_acc_vs_epsilon_mnist.png)
 
 ---
 
-### Exp 2 — Accuracy vs Number of Steps (T)
+### Exp 2 — Accuracy & ASR vs Number of Steps (T)
 
-Fixed: `ε=0.3`. Evaluated on MNIST test set.
+Fixed: **`ε=0.1`** (`steps_epsilon` in config — chosen so that step count produces a visible difference).
+Evaluated on MNIST test set (1,280 samples, 1,273 correctly classified).
 
-| T (steps) | Clean Acc | I-FGSM Acc | Drop |
-|---|---|---|---|
-| 5  | 99.45% | 0.00% | −99.45% |
-| 10 | 99.45% | 0.00% | −99.45% |
-| 20 | 99.45% | 0.00% | −99.45% |
-| 40 | 99.45% | 0.00% | −99.45% |
+| T (steps) | Clean Acc | I-FGSM Acc | ASR | Drop |
+|---|---|---|---|---|
+| 5  | 99.45% | 26.64% | 73.2% | −72.81% |
+| 10 | 99.45% | 21.25% | 78.6% | −78.20% |
+| 20 | 99.45% | 18.20% | 81.7% | −81.25% |
+| 40 | 99.45% | 16.56% | 83.4% | −82.89% |
 
-At `ε=0.3`, the attack fully saturates in as few as 5 steps. To observe the convergence effect, reduce the budget to `ε=0.05–0.1` where each additional step provides incremental gain.
-
-The chart includes a horizontal **Clean accuracy baseline** line for reference.
+**Key takeaways:**
+- Attack strength increases with step count, but with **diminishing returns**: the jump from T=5→10 (5.4 pp drop) is larger than T=20→40 (1.6 pp drop).
+- At T=40 the attack is approaching convergence — further iterations yield minimal gain.
+- The horizontal clean baseline line in the chart makes the accuracy gap visually clear.
 
 ![Exp2 MNIST](results/figures/exp2_acc_vs_steps_mnist.png)
 
@@ -383,15 +392,19 @@ The chart includes a horizontal **Clean accuracy baseline** line for reference.
 
 ### Exp 3 — Adversarial Example Visualization
 
-Images are drawn from the **correctly classified** subset only. Side-by-side comparison of:
+All visualizations are generated from the **correctly classified** subset only.
 
-1. **Original image** — correctly classified by the model
-2. **Perturbation** (×10 amplified for visibility) — the `sign(∇)` pattern
-3. **Adversarial image** — visually identical but misclassified (red title) or still correct (green)
+**1. Side-by-side image comparison** — original | perturbation (×10) | adversarial:
 
 ![Exp3 Examples MNIST](results/figures/exp3_examples_mnist.png)
 
-Loss evolution across I-FGSM iterations, showing the cross-entropy loss rising as the attack progresses:
+**2. Prediction probability bar chart** — softmax probabilities before (blue) and after (red) I-FGSM attack. The true-label bar is outlined in black; the predicted bar is fully opaque:
+
+![Exp3 Prediction Probs MNIST](results/figures/exp3_pred_probs_mnist.png)
+
+Before attack the model assigns ~100% confidence to the correct class. After attack, that confidence shifts entirely to a **wrong class** — also with ~100% certainty — demonstrating how adversarial examples exploit the model's decision boundary.
+
+**3. Loss evolution** — cross-entropy loss rising across I-FGSM iterations:
 
 ![Exp3 Loss Evolution MNIST](results/figures/exp3_loss_evolution_mnist.png)
 
@@ -421,7 +434,7 @@ train:
 
 attack:
   method: "ifgsm"
-  epsilon: 0.3            # max L∞ perturbation
+  epsilon: 0.3            # max L∞ perturbation (used by Exp1 and Exp3)
   alpha: 0.01             # step size (null → auto = epsilon / num_steps)
   num_steps: 40           # iterations T
   targeted: false
@@ -431,6 +444,7 @@ attack:
 experiment:
   epsilon_list: [0.05, 0.1, 0.15, 0.2, 0.25, 0.3]
   steps_list: [5, 10, 20, 40]
+  steps_epsilon: 0.1      # epsilon used by Exp2 — smaller so step count matters
   seed: 42
   device: "cuda"          # cuda | cpu | mps
   num_samples: 1000
@@ -440,11 +454,12 @@ vis:
   save_dir: "./results/figures"
 ```
 
-The `--datasets` CLI argument in `main.py` overrides `dataset.name` for each run without modifying this file:
+The `--dataset` CLI argument overrides `dataset.name` without modifying this file:
 
 ```bash
-python main.py --datasets MNIST CIFAR10   # runs both sequentially
-python main.py --datasets CIFAR10         # CIFAR-10 only
+python main.py --dataset MNIST    # MNIST only (default)
+python main.py --dataset CIFAR10  # CIFAR-10 only
+python main.py --dataset both     # run both sequentially
 ```
 
 ---
