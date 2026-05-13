@@ -1,6 +1,6 @@
 # I-FGSM Adversarial Attack — Image Classifier
 
-Implementation of **I-FGSM (Iterative Fast Gradient Sign Method)** adversarial attacks on MNIST and CIFAR-10 image classifiers, with full training, evaluation, and visualization pipelines.
+Implementation of **FGSM** and **I-FGSM (Iterative Fast Gradient Sign Method)** adversarial attacks on MNIST and CIFAR-10 image classifiers, with full training, evaluation, and visualization pipelines.
 
 > Paper: *Adversarial Examples in the Physical World* — Kurakin, Goodfellow & Bengio (2016)
 > https://arxiv.org/abs/1607.02533
@@ -14,6 +14,7 @@ Implementation of **I-FGSM (Iterative Fast Gradient Sign Method)** adversarial a
 ## Table of Contents
 
 - [What is I-FGSM?](#what-is-i-fgsm)
+- [Evaluation Methodology](#evaluation-methodology)
 - [Project Structure](#project-structure)
 - [Setup](#setup)
 - [Usage](#usage)
@@ -57,6 +58,30 @@ FGSM takes a single large step and often overshoots. I-FGSM refines the adversar
 
 ---
 
+## Evaluation Methodology
+
+All experiments follow a strict **2-phase evaluation** to measure attack effectiveness fairly:
+
+```
+Phase 1 — Predict & Filter
+  Feed entire test set through the model (no attack)
+  → Record clean accuracy
+  → Keep only the samples the model predicted CORRECTLY
+
+Phase 2 — Attack
+  Run FGSM and I-FGSM only on the correctly classified samples
+  → Measure how many remain correct after attack
+  → Report absolute accuracy over the full test set
+```
+
+**Why attack only correctly classified samples?**
+
+Attacking misclassified samples is meaningless — they are already wrong. This methodology isolates the true attack strength: *of the examples the model gets right, how many can be fooled?*
+
+The reported accuracy numbers use the full test set as the denominator, so clean accuracy and adversarial accuracy are directly comparable on the same scale.
+
+---
+
 ## Project Structure
 
 ```
@@ -73,7 +98,7 @@ ifgsm_project/
 ├── utils/
 │   ├── data_loader.py        # MNIST / CIFAR-10 dataloaders
 │   ├── trainer.py            # Training loop with checkpoint saving
-│   ├── evaluator.py          # Batch evaluation under adversarial attack
+│   ├── evaluator.py          # 2-phase adversarial evaluation
 │   └── visualization.py      # Plot generation utilities
 │
 ├── experiments/
@@ -90,7 +115,7 @@ ifgsm_project/
 │   └── logs/                 # Experiment metrics (.json)
 │
 ├── tests/
-│   └── test_ifgsm.py         # pytest unit tests (15 tests)
+│   └── test_ifgsm.py         # pytest unit tests
 │
 ├── train.py                  # Standalone training script
 ├── main.py                   # Full pipeline (train + all experiments)
@@ -121,16 +146,20 @@ pip install -r requirements.txt
 
 ## Usage
 
-### Run the full pipeline
+### Run the full pipeline (both datasets)
 
 ```bash
-# Train model + run all 3 experiments
+# Train + run all 3 experiments on MNIST and CIFAR-10
 python main.py
 
-# Skip training (reuse saved checkpoint)
+# Run on a single dataset
+python main.py --datasets MNIST
+python main.py --datasets CIFAR10
+
+# Skip training (reuse saved checkpoints)
 python main.py --skip-train
 
-# Run specific experiments only (e.g., exp 1 and 3)
+# Run specific experiments only (e.g., exp 1 and 3) on both datasets
 python main.py --skip-train --exp 1 3
 ```
 
@@ -145,9 +174,14 @@ python train.py --dataset CIFAR10
 
 # Train with ResNet-18 instead of SimpleCNN
 python train.py --model ResNet18
+
+# Override hyperparameters from CLI
+python train.py --dataset CIFAR10 --epochs 30 --lr 0.0005
 ```
 
 ### Run experiments individually
+
+Each experiment accepts an optional `--dataset` override via the `run()` function:
 
 ```bash
 python experiments/exp1_epsilon.py   # accuracy vs epsilon sweep
@@ -208,17 +242,17 @@ A modified torchvision ResNet-18 adapted for small images:
 from attacks.ifgsm import IFGSMAttack
 
 attacker = IFGSMAttack(
-    model       = model,
-    epsilon     = 0.3,       # L∞ budget
-    num_steps   = 40,        # iterations T
-    alpha       = None,      # None → auto = epsilon / num_steps
-    targeted    = False,     # True for targeted attack
-    random_start= False,     # True → PGD-style random initialization
-    clip_min    = 0.0,
-    clip_max    = 1.0,
+    model        = model,
+    epsilon      = 0.3,       # L∞ budget
+    num_steps    = 40,        # iterations T
+    alpha        = None,      # None → auto = epsilon / num_steps
+    targeted     = False,     # True for targeted attack
+    random_start = False,     # True → PGD-style random initialization
+    clip_min     = 0.0,
+    clip_max     = 1.0,
 )
 
-adv_images = attacker(images, labels)       # returns adversarial images
+adv_images = attacker(images, labels)
 adv_images, perturbation = attacker.get_perturbation(images, labels)
 
 # Attack statistics after each call
@@ -272,40 +306,59 @@ The `Trainer` class handles the full training loop:
 |---|---|
 | Dataset split | 54,000 train / 6,000 val / 10,000 test |
 | Model | SimpleCNN |
-| Optimizer | Adam (lr=0.001, weight_decay=1e-4) |
+| Optimizer | Adam (lr=0.001, weight\_decay=1e-4) |
 | Scheduler | StepLR (step=10, γ=0.1) |
 | Epochs | 20 |
 | Batch size | 64 |
 | **Best val accuracy** | **98.98%** |
 | **Test accuracy** | **99.45%** |
 
+### CIFAR-10 training settings
+
+| Setting | Value |
+|---|---|
+| Dataset split | 45,000 train / 5,000 val / 10,000 test |
+| Model | SimpleCNN |
+| Optimizer | Adam (lr=0.001, weight\_decay=1e-4) |
+| Scheduler | StepLR (step=10, γ=0.1) |
+| Epochs | 20 |
+| Batch size | 64 |
+| Augmentation | RandomCrop(32, padding=4) + RandomHorizontalFlip |
+
 Training history (loss and accuracy curves):
 
-![Training History](results/figures/training_history_mnist.png)
+![Training History MNIST](results/figures/training_history_mnist.png)
 
 ---
 
 ## Experiment Results
 
+> All results use the **2-phase evaluation** described above.
+> FGSM and I-FGSM accuracy are measured over the **full test set** (denominator),
+> but attacks are applied only to the **correctly classified subset**.
+
+---
+
 ### Exp 1 — Accuracy vs Epsilon (ε)
 
-Fixed: `T=40` steps. Evaluated on MNIST test set (10,000 images).
+Fixed: `T=40` steps. Evaluated on MNIST test set (10,000 total, ~9,945 correctly classified).
 
-| ε | Clean Acc | FGSM Acc | I-FGSM Acc | I-FGSM Drop |
-|---|---|---|---|---|
-| 0.05 | 99.45% | 94.53% | 85.23% | −14.22% |
-| 0.10 | 99.45% | 70.63% | 16.56% | −82.89% |
-| 0.15 | 99.45% | 42.73% | 0.70% | −98.75% |
-| 0.20 | 99.45% | 25.16% | 0.00% | −99.45% |
-| 0.25 | 99.45% | 15.94% | 0.00% | −99.45% |
-| 0.30 | 99.45% | 11.17% | 0.00% | −99.45% |
+| ε | Clean Acc | n\_correct | FGSM Acc | I-FGSM Acc | I-FGSM Drop |
+|---|---|---|---|---|---|
+| 0.05 | 99.45% | 9,945 | 94.53% | 85.23% | −14.22% |
+| 0.10 | 99.45% | 9,945 | 70.63% | 16.56% | −82.89% |
+| 0.15 | 99.45% | 9,945 | 42.73% | 0.70% | −98.75% |
+| 0.20 | 99.45% | 9,945 | 25.16% | 0.00% | −99.45% |
+| 0.25 | 99.45% | 9,945 | 15.94% | 0.00% | −99.45% |
+| 0.30 | 99.45% | 9,945 | 11.17% | 0.00% | −99.45% |
 
 **Key takeaways:**
-- At `ε=0.10`, I-FGSM drops accuracy from 99.45% → 16.56%, while FGSM only drops it to 70.63% — a 4× larger attack impact at the same perturbation budget.
-- At `ε=0.20`, I-FGSM achieves **100% attack success rate** (0% accuracy remaining).
-- FGSM retains ~11% accuracy even at `ε=0.30`, showing its saturation limit vs. iterative methods.
+- Clean accuracy is constant (9,945 correct samples — same pool is attacked at every ε).
+- At `ε=0.10`, I-FGSM drops accuracy from 99.45% → 16.56% vs. FGSM only to 70.63% — 4× larger impact at the same perturbation budget.
+- At `ε=0.20`, I-FGSM achieves **100% attack success rate** (0% accuracy) on the correctly classified pool.
+- FGSM retains ~11% accuracy even at `ε=0.30`, illustrating the saturation limit of single-step attacks.
 
-![Exp1](results/figures/exp1_acc_vs_epsilon_mnist.png)
+![Exp1 MNIST](results/figures/exp1_acc_vs_epsilon_mnist.png)
 
 ---
 
@@ -313,31 +366,34 @@ Fixed: `T=40` steps. Evaluated on MNIST test set (10,000 images).
 
 Fixed: `ε=0.3`. Evaluated on MNIST test set.
 
-| T (steps) | I-FGSM Acc |
-|---|---|
-| 5 | 0.00% |
-| 10 | 0.00% |
-| 20 | 0.00% |
-| 40 | 0.00% |
+| T (steps) | Clean Acc | I-FGSM Acc | Drop |
+|---|---|---|---|
+| 5  | 99.45% | 0.00% | −99.45% |
+| 10 | 99.45% | 0.00% | −99.45% |
+| 20 | 99.45% | 0.00% | −99.45% |
+| 40 | 99.45% | 0.00% | −99.45% |
 
-At `ε=0.3`, the attack fully saturates in as few as 5 steps — accuracy drops to 0% regardless of T. To observe the step-count effect, use a smaller budget (`ε=0.05–0.1`) where each additional step provides incremental gain.
+At `ε=0.3`, the attack fully saturates in as few as 5 steps. To observe the convergence effect, reduce the budget to `ε=0.05–0.1` where each additional step provides incremental gain.
 
-![Exp2](results/figures/exp2_acc_vs_steps_mnist.png)
+The chart includes a horizontal **Clean accuracy baseline** line for reference.
+
+![Exp2 MNIST](results/figures/exp2_acc_vs_steps_mnist.png)
 
 ---
 
 ### Exp 3 — Adversarial Example Visualization
 
-Side-by-side comparison of:
-1. **Original image** — correctly classified
+Images are drawn from the **correctly classified** subset only. Side-by-side comparison of:
+
+1. **Original image** — correctly classified by the model
 2. **Perturbation** (×10 amplified for visibility) — the `sign(∇)` pattern
-3. **Adversarial image** — visually identical but misclassified
+3. **Adversarial image** — visually identical but misclassified (red title) or still correct (green)
 
-![Exp3 Examples](results/figures/exp3_examples_mnist.png)
+![Exp3 Examples MNIST](results/figures/exp3_examples_mnist.png)
 
-Loss evolution across iterations, showing the attack converging as the cross-entropy loss rises:
+Loss evolution across I-FGSM iterations, showing the cross-entropy loss rising as the attack progresses:
 
-![Exp3 Loss Evolution](results/figures/exp3_loss_evolution_mnist.png)
+![Exp3 Loss Evolution MNIST](results/figures/exp3_loss_evolution_mnist.png)
 
 ---
 
@@ -349,6 +405,7 @@ All hyperparameters are centralized in `configs/config.yaml`:
 dataset:
   name: "MNIST"           # MNIST | CIFAR10
   batch_size: 64
+  val_split: 0.1
 
 model:
   name: "SimpleCNN"       # SimpleCNN | ResNet18
@@ -359,21 +416,35 @@ train:
   weight_decay: 0.0001
   optimizer: "Adam"
   scheduler: "StepLR"
-  scheduler_step: 10
-  scheduler_gamma: 0.1
+  step_size: 10
+  gamma: 0.1
 
 attack:
+  method: "ifgsm"
   epsilon: 0.3            # max L∞ perturbation
+  alpha: 0.01             # step size (null → auto = epsilon / num_steps)
   num_steps: 40           # iterations T
-  alpha: null             # null → auto = epsilon / num_steps
   targeted: false
-  random_start: false     # true → PGD-style
+  clip_min: 0.0
+  clip_max: 1.0
 
 experiment:
   epsilon_list: [0.05, 0.1, 0.15, 0.2, 0.25, 0.3]
   steps_list: [5, 10, 20, 40]
-  num_samples: 1000       # images per experiment run
+  seed: 42
   device: "cuda"          # cuda | cpu | mps
+  num_samples: 1000
+
+vis:
+  num_examples: 10
+  save_dir: "./results/figures"
+```
+
+The `--datasets` CLI argument in `main.py` overrides `dataset.name` for each run without modifying this file:
+
+```bash
+python main.py --datasets MNIST CIFAR10   # runs both sequentially
+python main.py --datasets CIFAR10         # CIFAR-10 only
 ```
 
 ---
