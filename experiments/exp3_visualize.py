@@ -24,7 +24,11 @@ import yaml
 from models              import SimpleCNN
 from attacks.ifgsm       import IFGSMAttack
 from utils.data_loader   import get_dataloaders, get_in_channels, get_input_size
-from utils.visualization import plot_adversarial_examples, plot_loss_evolution
+from utils.visualization import (
+    plot_adversarial_examples,
+    plot_loss_evolution,
+    plot_prediction_probs,
+)
 
 MNIST_CLASSES   = [str(i) for i in range(10)]
 CIFAR10_CLASSES = [
@@ -127,6 +131,18 @@ def run(config_path: str = "../configs/config.yaml", dataset: str = None):
         loss_history = attacker.last_stats["loss_history"],
         epsilon      = epsilon,
         save_path    = os.path.join(fig_dir, f"exp3_loss_evolution_{ds_name.lower()}.png"),
+    )
+
+    # ── Vẽ xác suất dự đoán trước/sau tấn công ────────────────
+    plot_prediction_probs(
+        model        = model,
+        original     = correct_images[:n_show],
+        adversarial  = adv_images[:n_show],
+        true_labels  = correct_labels[:n_show].tolist(),
+        class_names  = class_names,
+        dataset_name = ds_name,
+        n_cols       = n_show,
+        save_path    = os.path.join(fig_dir, f"exp3_pred_probs_{ds_name.lower()}.png"),
     )
 
     print(f"\n[Exp3 — {ds_name}] Hoàn tất!")

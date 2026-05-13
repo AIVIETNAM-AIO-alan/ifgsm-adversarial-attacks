@@ -235,6 +235,7 @@ def plot_accuracy_vs_steps(
         ha="center", fontsize=9, color="gray",
     )
     ax.set_xticks(steps)
+    ax.set_ylim(0, 105)
     ax.legend(fontsize=10)
     ax.grid(True, alpha=0.3)
 
@@ -243,7 +244,99 @@ def plot_accuracy_vs_steps(
 
 
 # ─────────────────────────────────────────────────────────────
-# 4. Training history
+# 4. Prediction probability bar chart (trước và sau tấn công)
+# ─────────────────────────────────────────────────────────────
+
+def plot_prediction_probs(
+    model        : "torch.nn.Module",
+    original     : "torch.Tensor",
+    adversarial  : "torch.Tensor",
+    true_labels  : List[int],
+    class_names  : Optional[List[str]] = None,
+    dataset_name : str                 = "",
+    n_cols       : int                 = 5,
+    save_path    : Optional[str]       = None,
+) -> None:
+    """
+    Với mỗi mẫu, vẽ bar chart xác suất softmax trước (xanh) và sau (đỏ) tấn công.
+    Cột đúng (true label) được đánh dấu bằng viền đậm.
+
+    Args:
+        model       : model đã eval
+        original    : ảnh gốc  [N, C, H, W]
+        adversarial : ảnh đối kháng [N, C, H, W]
+        true_labels : nhãn thực [N]
+        class_names : tên lớp (tuỳ chọn)
+        dataset_name: tên dataset (cho tiêu đề)
+        n_cols      : số mẫu hiển thị
+        save_path   : đường dẫn lưu file
+    """
+    import torch.nn.functional as F
+
+    model.eval()
+    n     = min(n_cols, original.size(0))
+    device = next(model.parameters()).device
+
+    with torch.no_grad():
+        orig_logits = model(original[:n].to(device))
+        adv_logits  = model(adversarial[:n].to(device))
+
+    orig_probs = F.softmax(orig_logits, dim=1).cpu().numpy()
+    adv_probs  = F.softmax(adv_logits,  dim=1).cpu().numpy()
+
+    num_classes = orig_probs.shape[1]
+    x = np.arange(num_classes)
+    labels = class_names if class_names else [str(i) for i in range(num_classes)]
+
+    fig, axes = plt.subplots(2, n, figsize=(2.8 * n, 6), sharey=False)
+    if n == 1:
+        axes = axes.reshape(2, 1)
+
+    ds_title = f" — {dataset_name}" if dataset_name else ""
+    fig.suptitle(
+        f"Xác suất dự đoán trước & sau I-FGSM{ds_title}",
+        fontsize=13, fontweight="bold",
+    )
+
+    for col in range(n):
+        true_cls = true_labels[col]
+        orig_pred = int(np.argmax(orig_probs[col]))
+        adv_pred  = int(np.argmax(adv_probs[col]))
+
+        for row, (probs, pred, row_label, color) in enumerate([
+            (orig_probs[col], orig_pred, "Gốc",        "steelblue"),
+            (adv_probs[col],  adv_pred,  "Đối kháng",  "tomato"),
+        ]):
+            ax = axes[row, col]
+            bars = ax.bar(x, probs, color=color, alpha=0.75, width=0.7)
+
+            # Đánh dấu true label bằng viền đen
+            bars[true_cls].set_edgecolor("black")
+            bars[true_cls].set_linewidth(2.5)
+
+            # Highlight predicted bar
+            bars[pred].set_alpha(1.0)
+
+            ax.set_xticks(x)
+            ax.set_xticklabels(labels, fontsize=7, rotation=45, ha="right")
+            ax.set_ylim(0, 1.05)
+            ax.set_yticks([0, 0.5, 1.0])
+            ax.tick_params(axis="y", labelsize=7)
+
+            pred_color = "green" if pred == true_cls else "red"
+            ax.set_title(
+                f"{row_label}: {labels[pred]} ({probs[pred]*100:.1f}%)",
+                fontsize=8, color=pred_color, fontweight="bold",
+            )
+            if col == 0:
+                ax.set_ylabel("P(class)", fontsize=8)
+
+    plt.tight_layout()
+    _save_or_show(fig, save_path or os.path.join(SAVE_DIR, "prediction_probs.png"))
+
+
+# ─────────────────────────────────────────────────────────────
+# 5. Training history
 # ─────────────────────────────────────────────────────────────
 
 def plot_training_history(

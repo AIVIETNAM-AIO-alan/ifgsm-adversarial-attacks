@@ -72,7 +72,8 @@ def run(config_path: str = "../configs/config.yaml", dataset: str = None):
 
     # ── Đánh giá (flow 2 pha) ─────────────────────────────────
     evaluator  = AdversarialEvaluator(model, device=device)
-    epsilon    = cfg["attack"]["epsilon"]
+    # Dùng steps_epsilon (nhỏ hơn attack.epsilon) để thấy rõ hiệu ứng số bước
+    epsilon    = cfg["experiment"].get("steps_epsilon", cfg["attack"]["epsilon"])
     steps_list = cfg["experiment"]["steps_list"]
 
     results = evaluator.evaluate_steps(

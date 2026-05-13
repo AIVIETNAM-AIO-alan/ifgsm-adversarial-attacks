@@ -44,6 +44,7 @@ experiment:
   name: "ifgsm_mnist"
   epsilon_list: [0.05, 0.1, 0.15, 0.2, 0.25, 0.3]
   steps_list: [5, 10, 20, 40]
+  steps_epsilon: 0.1          # epsilon dùng riêng cho Exp2 (nhỏ hơn để thấy sự khác biệt giữa các bước)
   seed: 42
   device: "cuda"          # cuda | cpu | mps
   num_samples: 1000       # số ảnh dùng để eval

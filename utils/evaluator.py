@@ -9,6 +9,7 @@ Flow 2 pha:
              → đo accuracy giảm còn bao nhiêu
 """
 
+import time
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
@@ -144,6 +145,7 @@ class AdversarialEvaluator:
                 clip_max = self.clip_max,
             )
             fgsm_surv = ifgsm_surv = 0
+            fgsm_time = ifgsm_time = 0.0
 
             for i in tqdm(
                 range(0, n_correct, batch_sz),
@@ -153,36 +155,47 @@ class AdversarialEvaluator:
                 lbls = labels[i : i + batch_sz]
 
                 # FGSM (1 bước)
+                t0 = time.perf_counter()
                 adv_f = fgsm_attack(
                     self.model, imgs, lbls, eps,
                     self.clip_min, self.clip_max,
                 )
+                fgsm_time += time.perf_counter() - t0
                 with torch.no_grad():
                     fgsm_surv += (self.model(adv_f).argmax(1) == lbls).sum().item()
 
                 # I-FGSM (nhiều bước)
+                t0 = time.perf_counter()
                 adv_i = attacker(imgs, lbls)
+                ifgsm_time += time.perf_counter() - t0
                 with torch.no_grad():
                     ifgsm_surv += (self.model(adv_i).argmax(1) == lbls).sum().item()
 
             fgsm_acc  = 100.0 * fgsm_surv  / total
             ifgsm_acc = 100.0 * ifgsm_surv / total
+            # ASR = % mẫu đúng bị đánh lừa thành công
+            fgsm_asr  = 100.0 * (n_correct - fgsm_surv)  / n_correct
+            ifgsm_asr = 100.0 * (n_correct - ifgsm_surv) / n_correct
 
             r = {
-                "epsilon"    : eps,
-                "total_test" : total,
-                "n_correct"  : n_correct,
-                "clean_acc"  : clean_acc,
-                "fgsm_acc"   : fgsm_acc,
-                "ifgsm_acc"  : ifgsm_acc,
-                "fgsm_drop"  : clean_acc - fgsm_acc,
-                "ifgsm_drop" : clean_acc - ifgsm_acc,
+                "epsilon"      : eps,
+                "total_test"   : total,
+                "n_correct"    : n_correct,
+                "clean_acc"    : clean_acc,
+                "fgsm_acc"     : fgsm_acc,
+                "ifgsm_acc"    : ifgsm_acc,
+                "fgsm_drop"    : clean_acc - fgsm_acc,
+                "ifgsm_drop"   : clean_acc - ifgsm_acc,
+                "fgsm_asr"     : fgsm_asr,
+                "ifgsm_asr"    : ifgsm_asr,
+                "fgsm_time_s"  : round(fgsm_time, 3),
+                "ifgsm_time_s" : round(ifgsm_time, 3),
             }
             results.append(r)
             print(
                 f"  ε={eps:.3f} | Clean={clean_acc:.2f}% → "
-                f"FGSM={fgsm_acc:.2f}% (↓{r['fgsm_drop']:.2f}%) | "
-                f"I-FGSM={ifgsm_acc:.2f}% (↓{r['ifgsm_drop']:.2f}%)"
+                f"FGSM={fgsm_acc:.2f}% (ASR={fgsm_asr:.1f}%, {fgsm_time:.1f}s) | "
+                f"I-FGSM={ifgsm_acc:.2f}% (ASR={ifgsm_asr:.1f}%, {ifgsm_time:.1f}s)"
             )
 
         return results
@@ -236,6 +249,7 @@ class AdversarialEvaluator:
                 clip_max = self.clip_max,
             )
             survived = 0
+            attack_time = 0.0
 
             for i in tqdm(
                 range(0, n_correct, batch_sz),
@@ -243,24 +257,29 @@ class AdversarialEvaluator:
             ):
                 imgs = images[i : i + batch_sz]
                 lbls = labels[i : i + batch_sz]
+                t0   = time.perf_counter()
                 adv  = attacker(imgs, lbls)
+                attack_time += time.perf_counter() - t0
                 with torch.no_grad():
                     survived += (self.model(adv).argmax(1) == lbls).sum().item()
 
-            adv_acc = 100.0 * survived / total
+            adv_acc  = 100.0 * survived / total
+            asr      = 100.0 * (n_correct - survived) / n_correct
             r = {
-                "num_steps"  : steps,
-                "total_test" : total,
-                "n_correct"  : n_correct,
-                "clean_acc"  : clean_acc,
-                "adv_acc"    : adv_acc,
-                "acc_drop"   : clean_acc - adv_acc,
+                "num_steps"   : steps,
+                "total_test"  : total,
+                "n_correct"   : n_correct,
+                "clean_acc"   : clean_acc,
+                "adv_acc"     : adv_acc,
+                "acc_drop"    : clean_acc - adv_acc,
+                "asr"         : asr,
+                "attack_time_s": round(attack_time, 3),
             }
             results.append(r)
             print(
                 f"  steps={steps:3d} | "
                 f"Clean={clean_acc:.2f}% → I-FGSM={adv_acc:.2f}% "
-                f"(↓{r['acc_drop']:.2f}%)"
+                f"(ASR={asr:.1f}%, {attack_time:.1f}s)"
             )
 
         return results

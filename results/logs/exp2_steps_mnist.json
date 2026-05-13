@@ -1,18 +1,34 @@
 [
   {
     "num_steps": 5,
-    "adv_acc": 0.0
+    "total_test": 1280,
+    "n_correct": 1273,
+    "clean_acc": 99.453125,
+    "adv_acc": 26.640625,
+    "acc_drop": 72.8125
   },
   {
     "num_steps": 10,
-    "adv_acc": 0.0
+    "total_test": 1280,
+    "n_correct": 1273,
+    "clean_acc": 99.453125,
+    "adv_acc": 21.25,
+    "acc_drop": 78.203125
   },
   {
     "num_steps": 20,
-    "adv_acc": 0.0
+    "total_test": 1280,
+    "n_correct": 1273,
+    "clean_acc": 99.453125,
+    "adv_acc": 18.203125,
+    "acc_drop": 81.25
   },
   {
     "num_steps": 40,
-    "adv_acc": 0.0
+    "total_test": 1280,
+    "n_correct": 1273,
+    "clean_acc": 99.453125,
+    "adv_acc": 16.5625,
+    "acc_drop": 82.890625
   }
 ]
