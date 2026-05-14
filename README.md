@@ -1,6 +1,6 @@
 # I-FGSM Adversarial Attack — Image Classifier
 
-Implementation of **FGSM** and **I-FGSM (Iterative Fast Gradient Sign Method)** adversarial attacks on MNIST and CIFAR-10 image classifiers, with full training, evaluation, and visualization pipelines.
+Implementation of **FGSM** and **I-FGSM (Iterative Fast Gradient Sign Method)** adversarial attacks on image classifiers, supporting **MNIST**, **CIFAR-10**, and **ImageNette** (pretrained ResNet-18), with full training, evaluation, and visualization pipelines.
 
 > Paper: *Adversarial Examples in the Physical World* — Kurakin, Goodfellow & Bengio (2016)
 > https://arxiv.org/abs/1607.02533
@@ -18,6 +18,7 @@ Implementation of **FGSM** and **I-FGSM (Iterative Fast Gradient Sign Method)** 
 - [Project Structure](#project-structure)
 - [Setup](#setup)
 - [Usage](#usage)
+- [Datasets](#datasets)
 - [Models](#models)
 - [Attack API](#attack-api)
 - [Training](#training)
@@ -48,7 +49,7 @@ xₜ₊₁ = Clip_{x,ε} [ xₜ + α · sign(∇ₓ J(θ, xₜ, y)) ]
 | `ε` | Maximum L∞ perturbation magnitude |
 | `α` | Step size per iteration (default: `ε / T`) |
 | `T` | Number of iterations |
-| `Clip_{x,ε}` | Keeps perturbation in `[-ε, +ε]` and pixels in `[0, 1]` |
+| `Clip_{x,ε}` | Keeps perturbation in `[-ε, +ε]` and pixels in valid range |
 
 **Why is I-FGSM stronger than FGSM?**
 
@@ -100,20 +101,24 @@ ifgsm_project/
 ├── attacks/
 │   ├── fgsm.py               # FGSM baseline (1-step, functional API)
 │   └── ifgsm.py              # I-FGSM: class-based + functional API
+│                             # Both support per-channel clip (ImageNette)
 │
 ├── models/
 │   ├── cnn.py                # SimpleCNN (auto-adapts to MNIST & CIFAR-10)
-│   └── resnet.py             # ResNet-18 wrapper (torchvision)
+│   ├── resnet.py             # ResNet-18 wrappers (standard + ImageNette pretrained)
+│   └── __init__.py           # Exports: SimpleCNN, get_resnet18, get_resnet18_imagenette
 │
 ├── utils/
-│   ├── data_loader.py        # MNIST / CIFAR-10 dataloaders
+│   ├── data_loader.py        # MNIST / CIFAR-10 / ImageNette dataloaders
+│   │                         # get_clip_values() for per-channel normalization
 │   ├── trainer.py            # Training loop with checkpoint saving
 │   ├── evaluator.py          # 2-phase evaluation: filter correct → attack
-│   └── visualization.py      # 5 plot types including probability bar charts
+│   │                         # Reports ASR, timing, perturbation metrics
+│   └── visualization.py      # 5 plot types including prediction probability bar charts
 │
 ├── experiments/
-│   ├── exp1_epsilon.py       # Sweep ε → accuracy, ASR, timing
-│   ├── exp2_steps.py         # Sweep T → accuracy, ASR, timing  (uses steps_epsilon)
+│   ├── exp1_epsilon.py       # Sweep ε → accuracy, ASR, timing (all datasets)
+│   ├── exp2_steps.py         # Sweep T → accuracy, ASR (uses steps_epsilon)
 │   └── exp3_visualize.py     # Images + perturbation + prediction probabilities
 │
 ├── configs/
@@ -127,7 +132,7 @@ ifgsm_project/
 ├── tests/
 │   └── test_ifgsm.py         # pytest unit tests
 │
-├── train.py                  # Standalone training script
+├── train.py                  # Standalone training script (all datasets/models)
 ├── main.py                   # Full pipeline (train + all experiments)
 └── requirements.txt
 ```
@@ -159,43 +164,53 @@ pip install -r requirements.txt
 ### Run the full pipeline
 
 ```bash
-# Train + run all 3 experiments on MNIST (default)
+# Train + all 3 experiments on MNIST (default)
 python main.py
 
-# Choose dataset: MNIST | CIFAR10 | both
+# Choose dataset
 python main.py --dataset MNIST
 python main.py --dataset CIFAR10
-python main.py --dataset both
+python main.py --dataset ImageNette    # pretrained ResNet-18, auto-download ~1.5 GB
+python main.py --dataset both          # MNIST + CIFAR-10 sequentially
 
 # Skip training (reuse saved checkpoints)
 python main.py --dataset CIFAR10 --skip-train
+python main.py --dataset ImageNette --skip-train
 
-# Run specific experiments only (e.g., exp 1 and 3)
+# Run specific experiments only
 python main.py --dataset MNIST --skip-train --exp 1 3
+python main.py --dataset ImageNette --skip-train --exp 1 2
 ```
 
 ### Train only
 
 ```bash
-# Train on MNIST (default)
+# Train SimpleCNN on MNIST (default)
 python train.py
 
-# Train on CIFAR-10
+# Train SimpleCNN on CIFAR-10
 python train.py --dataset CIFAR10
 
-# Train with ResNet-18 instead of SimpleCNN
+# Train pretrained ResNet-18 on ImageNette (auto-downloads dataset)
+python train.py --dataset ImageNette
+
+# Train with ResNet-18 on MNIST or CIFAR-10
 python train.py --model ResNet18
 
 # Override hyperparameters from CLI
-python train.py --dataset CIFAR10 --epochs 30 --lr 0.0005
+python train.py --dataset CIFAR10 --epochs 30 --lr 0.0005 --batch 128
 ```
 
 ### Run experiments individually
 
 ```bash
-python experiments/exp1_epsilon.py   # accuracy + ASR + timing vs epsilon
-python experiments/exp2_steps.py     # accuracy + ASR + timing vs num steps
-python experiments/exp3_visualize.py # images + perturbation + prediction probs
+# From project root — specify dataset via --dataset flag in config or override:
+python -c "from experiments.exp1_epsilon import run; run(config_path='configs/config.yaml', dataset='MNIST')"
+python -c "from experiments.exp1_epsilon import run; run(config_path='configs/config.yaml', dataset='CIFAR10')"
+python -c "from experiments.exp1_epsilon import run; run(config_path='configs/config.yaml', dataset='ImageNette')"
+
+python -c "from experiments.exp2_steps import run; run(config_path='configs/config.yaml', dataset='MNIST')"
+python -c "from experiments.exp3_visualize import run; run(config_path='configs/config.yaml', dataset='CIFAR10')"
 ```
 
 ### Run unit tests
@@ -203,6 +218,50 @@ python experiments/exp3_visualize.py # images + perturbation + prediction probs
 ```bash
 python -m pytest tests/ -v
 ```
+
+---
+
+## Datasets
+
+| Dataset | Classes | Image size | Normalization | Dataloader |
+|---|---|---|---|---|
+| **MNIST** | 10 (digits 0–9) | 28×28, grayscale | `[0, 1]` (raw pixel) | `torchvision.datasets.MNIST` |
+| **CIFAR-10** | 10 (objects) | 32×32, RGB | mean=(0.491, 0.482, 0.447) std=(0.247, 0.244, 0.262) | `torchvision.datasets.CIFAR10` |
+| **ImageNette** | 10 (ImageNet subset) | 224×224, RGB | ImageNet mean=(0.485, 0.456, 0.406) std=(0.229, 0.224, 0.225) | `ImageFolder` from fastai mirror |
+
+### ImageNette classes
+
+ImageNette is a 10-class subset of ImageNet selected for being easy to distinguish:
+
+```
+tench · English springer · cassette player · chain saw · church
+French horn · garbage truck · gas pump · golf ball · parachute
+```
+
+### Automatic download
+
+ImageNette (~1.5 GB) is **downloaded and extracted automatically** the first time you run any script with `--dataset ImageNette`. It is saved under `data/imagenette2-320/` and not re-downloaded on subsequent runs.
+
+```
+data/
+└── imagenette2-320/
+    ├── train/     ← 9,469 images (9,469 × 0.9 = 8,522 train + 947 val)
+    └── val/       ← 3,925 images used as test set
+```
+
+### Per-channel clip values
+
+MNIST and CIFAR-10 use scalar clip bounds `[0.0, 1.0]`. ImageNette images are normalized with ImageNet statistics, so valid pixel values are **per-channel tensors**:
+
+```python
+from utils.data_loader import get_clip_values
+
+clip_min, clip_max = get_clip_values("ImageNette")
+# clip_min: tensor([-2.118, -2.036, -1.804])
+# clip_max: tensor([ 2.249,  2.429,  2.640])
+```
+
+The attack code (`fgsm.py`, `ifgsm.py`) handles both scalar and tensor clip bounds transparently via an internal `_clip()` helper that broadcasts per-channel bounds to `[B, C, H, W]`.
 
 ---
 
@@ -234,12 +293,33 @@ Block 2:  Conv2d(32→64, 3×3) → BN → ReLU → Conv2d(64→64, 3×3) → BN
 Classifier: Flatten → Linear(4096→512) → ReLU → Dropout(0.5) → Linear(512→10)
 ```
 
-### ResNet-18
+> SimpleCNN is **not used** for ImageNette — the image resolution (224×224) and complexity of the classes require a deeper architecture.
 
-A modified torchvision ResNet-18 adapted for small images:
+### ResNet-18 (for MNIST / CIFAR-10)
 
-- **Grayscale input** (`in_channels=1`): the first `Conv2d` is replaced with a `3×3, stride=1` layer and `maxpool` is replaced with `Identity()` to avoid over-downsampling `28×28` images.
+A modified torchvision ResNet-18 adapted for small images (trained from scratch):
+
+- **Small-image adaptation**: the first `Conv2d` is replaced with a `3×3, stride=1` layer and `maxpool` is replaced with `Identity()` to avoid over-downsampling `28×28` or `32×32` inputs.
 - **Output layer**: the final `fc` is replaced with `Linear(512 → num_classes)`.
+
+```bash
+python train.py --dataset MNIST --model ResNet18
+python train.py --dataset CIFAR10 --model ResNet18
+```
+
+### ResNet-18 (pretrained, for ImageNette)
+
+For ImageNette, the project uses a **pretrained ResNet-18** fine-tuned on the 10 ImageNette classes:
+
+- Initialized with `ResNet18_Weights.IMAGENET1K_V1` (ImageNet-pretrained weights).
+- Only the final fully-connected layer is replaced: `Linear(512 → 10)`.
+- Input: standard 224×224 RGB images with ImageNet normalization.
+- **Selected automatically** when `--dataset ImageNette` is used — no `--model` flag needed.
+
+```python
+from models import get_resnet18_imagenette
+model = get_resnet18_imagenette(num_classes=10)
+```
 
 ---
 
@@ -249,16 +329,28 @@ A modified torchvision ResNet-18 adapted for small images:
 
 ```python
 from attacks.ifgsm import IFGSMAttack
+from utils.data_loader import get_clip_values
 
+# For MNIST / CIFAR-10 (scalar clip)
 attacker = IFGSMAttack(
     model        = model,
     epsilon      = 0.3,       # L∞ budget
     num_steps    = 40,        # iterations T
     alpha        = None,      # None → auto = epsilon / num_steps
-    targeted     = False,     # True for targeted attack
+    targeted     = False,
     random_start = False,     # True → PGD-style random initialization
     clip_min     = 0.0,
     clip_max     = 1.0,
+)
+
+# For ImageNette (per-channel tensor clip)
+clip_min, clip_max = get_clip_values("ImageNette")
+attacker = IFGSMAttack(
+    model    = model,
+    epsilon  = 0.05,
+    num_steps= 20,
+    clip_min = clip_min,      # tensor([−2.118, −2.036, −1.804])
+    clip_max = clip_max,      # tensor([ 2.249,  2.429,  2.640])
 )
 
 adv_images = attacker(images, labels)
@@ -288,7 +380,7 @@ adv = fgsm_attack(model, images, labels, epsilon=0.3)
 ### Targeted attack
 
 ```python
-target_labels = torch.full_like(labels, fill_value=3)  # fool model into predicting class 3
+target_labels = torch.full_like(labels, fill_value=3)  # force prediction → class 3
 attacker = IFGSMAttack(model, epsilon=0.2, num_steps=40, targeted=True)
 adv = attacker(images, target_labels)
 ```
@@ -332,6 +424,21 @@ The `Trainer` class handles the full training loop:
 | Batch size | 64 |
 | Augmentation | RandomCrop(32, padding=4) + RandomHorizontalFlip |
 
+### ImageNette training settings
+
+| Setting | Value |
+|---|---|
+| Dataset split | ~8,522 train / ~947 val / 3,925 test |
+| Model | ResNet-18 (pretrained ImageNet weights) |
+| Fine-tuned layer | Final `fc` only (first run); all layers update via optimizer |
+| Optimizer | Adam (lr=0.001, weight\_decay=1e-4) |
+| Scheduler | StepLR (step=10, γ=0.1) |
+| Epochs | 20 |
+| Batch size | 64 |
+| Augmentation | Resize(256) → RandomCrop(224) → RandomHorizontalFlip + ImageNet normalize |
+
+> Starting from ImageNet-pretrained weights, ResNet-18 converges quickly on ImageNette — typically reaching >90% val accuracy within a few epochs.
+
 Training history (loss and accuracy curves):
 
 ![Training History MNIST](results/figures/training_history_mnist.png)
@@ -371,7 +478,7 @@ Fixed: `T=40` steps. Evaluated on MNIST test set (10,000 total, 9,945 correctly 
 
 ### Exp 2 — Accuracy & ASR vs Number of Steps (T)
 
-Fixed: **`ε=0.1`** (`steps_epsilon` in config — chosen so that step count produces a visible difference).
+Fixed: **`ε=0.1`** (`steps_epsilon` in config — chosen separately from `attack.epsilon` so that step count differences are visible and the attack does not saturate immediately).
 Evaluated on MNIST test set (1,280 samples, 1,273 correctly classified).
 
 | T (steps) | Clean Acc | I-FGSM Acc | ASR | Drop |
@@ -416,35 +523,40 @@ All hyperparameters are centralized in `configs/config.yaml`:
 
 ```yaml
 dataset:
-  name: "MNIST"           # MNIST | CIFAR10
+  name: "MNIST"           # MNIST | CIFAR10 | ImageNette
+  root: "./data"
   batch_size: 64
   val_split: 0.1
+  num_workers: 2
 
 model:
   name: "SimpleCNN"       # SimpleCNN | ResNet18
+                          # (ImageNette always uses pretrained ResNet-18 automatically)
 
 train:
   epochs: 20
   lr: 0.001
   weight_decay: 0.0001
-  optimizer: "Adam"
+  optimizer: "Adam"       # Adam | SGD
   scheduler: "StepLR"
   step_size: 10
   gamma: 0.1
+  save_dir: "results/checkpoints"
 
 attack:
   method: "ifgsm"
   epsilon: 0.3            # max L∞ perturbation (used by Exp1 and Exp3)
-  alpha: 0.01             # step size (null → auto = epsilon / num_steps)
-  num_steps: 40           # iterations T
+  alpha: null             # null → auto = epsilon / num_steps
+  num_steps: 40           # iterations T (used by Exp1 and Exp3)
   targeted: false
-  clip_min: 0.0
+  clip_min: 0.0           # overridden automatically for ImageNette
   clip_max: 1.0
 
 experiment:
   epsilon_list: [0.05, 0.1, 0.15, 0.2, 0.25, 0.3]
   steps_list: [5, 10, 20, 40]
-  steps_epsilon: 0.1      # epsilon used by Exp2 — smaller so step count matters
+  steps_epsilon: 0.1      # epsilon used exclusively by Exp2
+                          # smaller than attack.epsilon to prevent early saturation
   seed: 42
   device: "cuda"          # cuda | cpu | mps
   num_samples: 1000
@@ -454,12 +566,21 @@ vis:
   save_dir: "./results/figures"
 ```
 
-The `--dataset` CLI argument overrides `dataset.name` without modifying this file:
+### Key config notes
+
+**`steps_epsilon`** (Exp2 only): Exp2 sweeps over the number of steps `T`. If `attack.epsilon` is large (e.g. 0.3), even 5 steps saturate the attack to ~0% accuracy, making the step-count chart meaningless. `steps_epsilon: 0.1` keeps the accuracy in a range where increasing `T` still produces visible differences.
+
+**ImageNette clip values**: `clip_min` and `clip_max` in the `attack` section are used for MNIST/CIFAR-10. For ImageNette, clip bounds are computed automatically from the ImageNet normalization constants — you do not need to change the config.
+
+### CLI overrides
+
+The `--dataset` flag overrides `dataset.name` without modifying the config file:
 
 ```bash
-python main.py --dataset MNIST    # MNIST only (default)
-python main.py --dataset CIFAR10  # CIFAR-10 only
-python main.py --dataset both     # run both sequentially
+python main.py --dataset MNIST        # MNIST only (default)
+python main.py --dataset CIFAR10      # CIFAR-10 only
+python main.py --dataset ImageNette   # ImageNette + pretrained ResNet-18
+python main.py --dataset both         # MNIST + CIFAR-10 sequentially
 ```
 
 ---
