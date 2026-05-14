@@ -24,7 +24,7 @@ import yaml
 import json
 
 from models            import SimpleCNN
-from utils.data_loader import get_dataloaders, get_in_channels, get_input_size
+from utils.data_loader import get_dataloaders, get_in_channels, get_input_size, get_clip_values
 from utils.evaluator   import AdversarialEvaluator
 from utils.visualization import plot_accuracy_vs_epsilon
 
@@ -69,7 +69,8 @@ def run(config_path: str = "../configs/config.yaml", dataset: str = None):
     )
 
     # ── Đánh giá (flow 2 pha) ─────────────────────────────────
-    evaluator = AdversarialEvaluator(model, device=device)
+    clip_min, clip_max = get_clip_values(ds_name)
+    evaluator = AdversarialEvaluator(model, device=device, clip_min=clip_min, clip_max=clip_max)
 
     eps_list = cfg["experiment"]["epsilon_list"]
     results  = evaluator.evaluate_epsilon_range(

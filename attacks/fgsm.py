@@ -13,6 +13,15 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
+def _clip(tensor: torch.Tensor, clip_min, clip_max) -> torch.Tensor:
+    """Clip — hỗ trợ cả scalar lẫn tensor per-channel (ImageNette)."""
+    if isinstance(clip_min, torch.Tensor):
+        lo = clip_min.view(1, -1, 1, 1).to(tensor.device)
+        hi = clip_max.view(1, -1, 1, 1).to(tensor.device)
+        return torch.max(torch.min(tensor, hi), lo)
+    return torch.clamp(tensor, clip_min, clip_max)
+
+
 def fgsm_attack(
     model     : nn.Module,
     images    : torch.Tensor,
@@ -55,6 +64,6 @@ def fgsm_attack(
     direction = -1 if targeted else 1
     # Tạo nhiễu — đẩy pixel theo hướng làm tăng loss
     adv_images = images + direction * epsilon * grad_sign
-    adv_images = torch.clamp(adv_images, clip_min, clip_max)
+    adv_images = _clip(adv_images, clip_min, clip_max)
 
     return adv_images.detach()

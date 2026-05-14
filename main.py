@@ -1,10 +1,10 @@
 """
 main.py
 ─────────────────────────────────────────────────────────────
-Pipeline chính — chạy cho cả MNIST và CIFAR-10 theo thứ tự:
+Pipeline chính — chạy cho MNIST, CIFAR-10 hoặc ImageNette:
 
   Với mỗi dataset:
-    1. Train model (SimpleCNN)
+    1. Train model (SimpleCNN / ResNet-18 cho ImageNette)
     2. Exp1: Accuracy vs Epsilon  (FGSM + I-FGSM)
     3. Exp2: Accuracy vs Num Steps (I-FGSM)
     4. Exp3: Visualize adversarial examples
@@ -14,10 +14,12 @@ Pipeline chính — chạy cho cả MNIST và CIFAR-10 theo thứ tự:
     Phase 2 → tấn công FGSM / I-FGSM chỉ trên mẫu đúng
 
 Cách dùng:
-    python main.py                       # chạy toàn bộ (MNIST + CIFAR-10)
-    python main.py --datasets MNIST      # chỉ MNIST
-    python main.py --skip-train          # bỏ qua train
-    python main.py --exp 1 2             # chỉ chạy exp 1 và 2
+    python main.py                          # chạy MNIST (mặc định)
+    python main.py --dataset CIFAR10        # chỉ CIFAR-10
+    python main.py --dataset ImageNette     # chỉ ImageNette (ResNet-18)
+    python main.py --dataset both           # MNIST + CIFAR-10
+    python main.py --skip-train             # bỏ qua train
+    python main.py --exp 1 2               # chỉ chạy exp 1 và 2
 """
 
 import argparse
@@ -34,8 +36,8 @@ def parse_args():
     parser.add_argument("--config",     type=str, default="configs/config.yaml")
     parser.add_argument(
         "--dataset", type=str, default="MNIST",
-        choices=["MNIST", "CIFAR10", "both"],
-        help="Dataset để chạy: MNIST | CIFAR10 | both (mặc định: MNIST)",
+        choices=["MNIST", "CIFAR10", "ImageNette", "both"],
+        help="Dataset để chạy: MNIST | CIFAR10 | ImageNette | both (mặc định: MNIST)",
     )
     parser.add_argument("--skip-train", action="store_true",
                         help="Bỏ qua bước train (cần checkpoint có sẵn)")
@@ -73,7 +75,6 @@ def main():
         os.makedirs(d, exist_ok=True)
 
     datasets_to_run = ["MNIST", "CIFAR10"] if args.dataset == "both" else [args.dataset]
-
     print_header("I-FGSM Adversarial Attack Project")
     print(f"  Dataset  : {args.dataset}")
     print(f"  Epsilon  : {cfg['attack']['epsilon']}")

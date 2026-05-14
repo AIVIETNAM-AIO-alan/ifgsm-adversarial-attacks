@@ -6,6 +6,7 @@ Wrapper cho ResNet-18 từ torchvision, hỗ trợ MNIST & CIFAR-10.
 
 import torch.nn as nn
 from torchvision import models
+from torchvision.models import ResNet18_Weights
 
 
 def get_resnet18(in_channels: int = 1, num_classes: int = 10) -> nn.Module:
@@ -37,4 +38,22 @@ def get_resnet18(in_channels: int = 1, num_classes: int = 10) -> nn.Module:
     # Thay lớp fully-connected cuối
     model.fc = nn.Linear(model.fc.in_features, num_classes)
 
+    return model
+
+
+def get_resnet18_imagenette(num_classes: int = 10) -> nn.Module:
+    """
+    ResNet-18 pretrained trên ImageNet, fine-tune cho ImageNette (10 lớp).
+
+    Dùng kiến trúc gốc (conv1 7×7, stride=2, maxpool) phù hợp với ảnh 224×224.
+    Chỉ thay lớp fc cuối cho 10 lớp ImageNette.
+
+    Args:
+        num_classes : số lớp đầu ra (mặc định 10)
+
+    Returns:
+        model: nn.Module đã load pretrained weights
+    """
+    model = models.resnet18(weights=ResNet18_Weights.IMAGENET1K_V1)
+    model.fc = nn.Linear(model.fc.in_features, num_classes)
     return model

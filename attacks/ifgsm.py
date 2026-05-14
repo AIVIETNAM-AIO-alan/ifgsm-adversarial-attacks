@@ -22,6 +22,15 @@ import torch.nn.functional as F
 from typing import Optional, Tuple
 
 
+def _clip(tensor: torch.Tensor, clip_min, clip_max) -> torch.Tensor:
+    """Clip — hỗ trợ cả scalar lẫn tensor per-channel (ImageNette)."""
+    if isinstance(clip_min, torch.Tensor):
+        lo = clip_min.view(1, -1, 1, 1).to(tensor.device)
+        hi = clip_max.view(1, -1, 1, 1).to(tensor.device)
+        return torch.max(torch.min(tensor, hi), lo)
+    return torch.clamp(tensor, clip_min, clip_max)
+
+
 # ─────────────────────────────────────────────────────────────
 # Class-based API (khuyến nghị dùng trong experiment)
 # ─────────────────────────────────────────────────────────────
@@ -99,7 +108,7 @@ class IFGSMAttack:
         if self.random_start:
             # PGD-style: nhiễu ngẫu nhiên trong [-ε, +ε]
             delta = torch.empty_like(images).uniform_(-self.epsilon, self.epsilon)
-            adv_images = torch.clamp(images + delta, self.clip_min, self.clip_max)
+            adv_images = _clip(images + delta, self.clip_min, self.clip_max)
         else:
             adv_images = images.clone()
 
@@ -127,10 +136,7 @@ class IFGSMAttack:
                 -self.epsilon, self.epsilon
             )
             # ── Clip 2: giữ pixel trong [clip_min, clip_max] ───
-            adv_images = torch.clamp(
-                images + perturbation,
-                self.clip_min, self.clip_max
-            )
+            adv_images = _clip(images + perturbation, self.clip_min, self.clip_max)
 
             loss_history.append(loss.item())
 

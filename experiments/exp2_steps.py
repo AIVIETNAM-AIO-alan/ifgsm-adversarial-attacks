@@ -27,9 +27,10 @@ import yaml
 import json
 
 from models              import SimpleCNN
-from utils.data_loader   import get_dataloaders, get_in_channels, get_input_size
+from utils.data_loader   import get_dataloaders, get_in_channels, get_input_size, get_clip_values
 from utils.evaluator     import AdversarialEvaluator
 from utils.visualization import plot_accuracy_vs_steps
+from models              import SimpleCNN, get_resnet18_imagenette
 
 
 def run(config_path: str = "../configs/config.yaml", dataset: str = None):
@@ -48,7 +49,10 @@ def run(config_path: str = "../configs/config.yaml", dataset: str = None):
     # ── Load model ────────────────────────────────────────────
     in_ch      = get_in_channels(ds_name)
     input_size = get_input_size(ds_name)
-    model      = SimpleCNN(in_channels=in_ch, num_classes=10, input_size=input_size)
+    if ds_name.upper() == "IMAGENETTE":
+        model = get_resnet18_imagenette(num_classes=10)
+    else:
+        model = SimpleCNN(in_channels=in_ch, num_classes=10, input_size=input_size)
 
     ckpt_path = os.path.join(
         cfg["train"]["save_dir"],
@@ -71,7 +75,8 @@ def run(config_path: str = "../configs/config.yaml", dataset: str = None):
     )
 
     # ── Đánh giá (flow 2 pha) ─────────────────────────────────
-    evaluator  = AdversarialEvaluator(model, device=device)
+    clip_min, clip_max = get_clip_values(ds_name)
+    evaluator  = AdversarialEvaluator(model, device=device, clip_min=clip_min, clip_max=clip_max)
     # Dùng steps_epsilon (nhỏ hơn attack.epsilon) để thấy rõ hiệu ứng số bước
     epsilon    = cfg["experiment"].get("steps_epsilon", cfg["attack"]["epsilon"])
     steps_list = cfg["experiment"]["steps_list"]

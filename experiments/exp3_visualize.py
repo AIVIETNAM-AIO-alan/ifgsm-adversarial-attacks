@@ -21,19 +21,23 @@ sys.path.insert(0, ROOT)
 import torch
 import yaml
 
-from models              import SimpleCNN
+from models              import SimpleCNN, get_resnet18_imagenette
 from attacks.ifgsm       import IFGSMAttack
-from utils.data_loader   import get_dataloaders, get_in_channels, get_input_size
+from utils.data_loader   import get_dataloaders, get_in_channels, get_input_size, get_clip_values
 from utils.visualization import (
     plot_adversarial_examples,
     plot_loss_evolution,
     plot_prediction_probs,
 )
 
-MNIST_CLASSES   = [str(i) for i in range(10)]
-CIFAR10_CLASSES = [
+MNIST_CLASSES      = [str(i) for i in range(10)]
+CIFAR10_CLASSES    = [
     "airplane", "automobile", "bird", "cat", "deer",
     "dog", "frog", "horse", "ship", "truck",
+]
+IMAGENETTE_CLASSES = [
+    "tench", "English springer", "cassette player", "chain saw", "church",
+    "French horn", "garbage truck", "gas pump", "golf ball", "parachute",
 ]
 
 
@@ -47,14 +51,22 @@ def run(config_path: str = "../configs/config.yaml", dataset: str = None):
     device = torch.device(
         cfg["experiment"]["device"] if torch.cuda.is_available() else "cpu"
     )
-    ds_name     = cfg["dataset"]["name"]
-    class_names = MNIST_CLASSES if ds_name.upper() == "MNIST" else CIFAR10_CLASSES
+    ds_name = cfg["dataset"]["name"]
+    if ds_name.upper() == "MNIST":
+        class_names = MNIST_CLASSES
+    elif ds_name.upper() == "CIFAR10":
+        class_names = CIFAR10_CLASSES
+    else:
+        class_names = IMAGENETTE_CLASSES
     print(f"[Exp3] Dataset: {ds_name} | Device: {device}")
 
     # ── Load model ────────────────────────────────────────────
     in_ch      = get_in_channels(ds_name)
     input_size = get_input_size(ds_name)
-    model      = SimpleCNN(in_channels=in_ch, num_classes=10, input_size=input_size)
+    if ds_name.upper() == "IMAGENETTE":
+        model = get_resnet18_imagenette(num_classes=10)
+    else:
+        model = SimpleCNN(in_channels=in_ch, num_classes=10, input_size=input_size)
 
     ckpt_path = os.path.join(cfg["train"]["save_dir"], f"{ds_name.lower()}_best.pth")
     if not os.path.exists(ckpt_path):
@@ -99,7 +111,9 @@ def run(config_path: str = "../configs/config.yaml", dataset: str = None):
     epsilon   = cfg["attack"]["epsilon"]
     num_steps = cfg["attack"]["num_steps"]
 
-    attacker   = IFGSMAttack(model, epsilon=epsilon, num_steps=num_steps)
+    clip_min, clip_max = get_clip_values(ds_name)
+    attacker   = IFGSMAttack(model, epsilon=epsilon, num_steps=num_steps,
+                             clip_min=clip_min, clip_max=clip_max)
     adv_images = attacker(correct_images, correct_labels)
 
     with torch.no_grad():

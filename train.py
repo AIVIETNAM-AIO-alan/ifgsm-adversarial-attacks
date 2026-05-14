@@ -16,7 +16,7 @@ import torch
 import torch.optim as optim
 import yaml
 
-from models            import SimpleCNN, get_resnet18
+from models            import SimpleCNN, get_resnet18, get_resnet18_imagenette
 from utils.data_loader import get_dataloaders, get_in_channels, get_input_size
 from utils.trainer     import Trainer
 from utils.visualization import plot_training_history
@@ -77,7 +77,11 @@ def main():
     input_size = get_input_size(ds_name)
     model_name = cfg["model"]["name"]
 
-    if model_name == "SimpleCNN":
+    if ds_name.upper() == "IMAGENETTE":
+        # ImageNette luôn dùng pretrained ResNet-18 (SimpleCNN quá nhỏ cho 224×224)
+        model = get_resnet18_imagenette(num_classes=10)
+        print(f"Model: ResNet-18 (pretrained ImageNet) | Params: {sum(p.numel() for p in model.parameters()):,}")
+    elif model_name == "SimpleCNN":
         model = SimpleCNN(in_channels=in_ch, num_classes=10, input_size=input_size)
     elif model_name == "ResNet18":
         model = get_resnet18(in_channels=in_ch, num_classes=10)
