@@ -609,66 +609,147 @@ Images are automatically denormalized to `[0, 1]` for display regardless of data
 > All results use the **2-phase evaluation**: attacks are applied only to the correctly classified subset.
 > Accuracy values use the full test set as denominator — clean and adversarial numbers are directly comparable.
 
-### Exp 1 — MNIST: Accuracy & ASR vs Epsilon
+### Dataset comparison summary
 
-Fixed: `T=40` steps. Test set: 10,000 total, 9,945 correctly classified.
+| | MNIST | CIFAR-10 |
+|---|---|---|
+| Model | SimpleCNN | SimpleCNN |
+| Clean accuracy | 99.45% | 76.02% |
+| I-FGSM ASR at ε=0.05 | 14.3% | **90.4%** |
+| I-FGSM ASR at ε=0.10 | 83.4% | **97.8%** |
+| FGSM ASR ceiling (ε=0.30) | 88.8% | 85.3% |
+| Steps to near-convergence | ~40 | **~5** |
 
-| ε | Clean Acc | FGSM Acc | FGSM ASR | I-FGSM Acc | I-FGSM ASR |
-|---|---|---|---|---|---|
-| 0.05 | 99.45% | 94.53% | 4.9% | 85.23% | 14.3% |
-| 0.10 | 99.45% | 70.63% | 28.9% | 16.56% | 83.4% |
-| 0.15 | 99.45% | 42.73% | 57.0% | 0.70% | 99.3% |
-| 0.20 | 99.45% | 25.16% | 74.7% | 0.00% | 100.0% |
-| 0.25 | 99.45% | 15.94% | 84.0% | 0.00% | 100.0% |
-| 0.30 | 99.45% | 11.17% | 88.8% | 0.00% | 100.0% |
+**Key cross-dataset insight:** CIFAR-10 is far more vulnerable than MNIST despite similar ε budgets. A model with lower clean accuracy tends to have a weaker decision boundary, making it easier to push samples across with small perturbations.
 
-> **ASR** = % of correctly classified samples successfully fooled.
+---
+
+### Exp 1 — Accuracy & ASR vs Epsilon (ε)
+
+Fixed: `T=40` steps, evaluated on 1,280-sample subset.
+
+#### MNIST — 973 / 1,280 correctly classified (clean acc: 99.45%)
+
+| ε | FGSM Acc | FGSM ASR | I-FGSM Acc | I-FGSM ASR |
+|---|---|---|---|---|
+| 0.05 | 94.53% | 4.9% | 85.23% | 14.3% |
+| 0.10 | 70.63% | 28.9% | 16.56% | 83.4% |
+| 0.15 | 42.73% | 57.0% | 0.70% | 99.3% |
+| 0.20 | 25.16% | 74.7% | 0.00% | 100.0% |
+| 0.25 | 15.94% | 84.0% | 0.00% | 100.0% |
+| 0.30 | 11.17% | **88.8%** | 0.00% | **100.0%** |
 
 **Key takeaways:**
-- At `ε=0.10`, I-FGSM achieves **83.4% ASR** vs. FGSM's 28.9% — nearly 3× more effective at the same budget.
+- At `ε=0.10`, I-FGSM achieves **83.4% ASR** vs. FGSM's 28.9% — nearly 3× stronger at the same budget.
 - At `ε=0.20`, I-FGSM reaches **100% ASR**: every correctly classified sample is fooled.
 - FGSM tops out at ~88.8% ASR even at `ε=0.30` — single-step attacks have a fundamental ceiling.
 
 ![Exp1 MNIST](results/figures/exp1_acc_vs_epsilon_mnist.png)
 
+#### CIFAR-10 — 973 / 1,280 correctly classified (clean acc: 76.02%)
+
+| ε | FGSM Acc | FGSM ASR | I-FGSM Acc | I-FGSM ASR |
+|---|---|---|---|---|
+| 0.05 | 21.02% | 72.4% | 7.27% | 90.4% |
+| 0.10 | 15.08% | 80.2% | 1.64% | 97.8% |
+| 0.15 | 12.66% | 83.4% | 1.17% | 98.5% |
+| 0.20 | 12.03% | 84.2% | 0.86% | 98.9% |
+| 0.25 | 11.64% | 84.7% | 0.47% | 99.4% |
+| 0.30 | 11.17% | **85.3%** | 0.23% | **99.7%** |
+
+**Key takeaways:**
+- Even at `ε=0.05`, I-FGSM already achieves **90.4% ASR** — CIFAR-10 is far more vulnerable than MNIST at the same budget.
+- FGSM saturates early (~85% ASR from ε=0.15 onward), confirming its single-step ceiling.
+- I-FGSM at `ε=0.10` nearly matches its ε=0.30 performance (97.8% vs 99.7%) — diminishing returns from larger ε.
+
+![Exp1 CIFAR-10](results/figures/exp1_acc_vs_epsilon_cifar10.png)
+
 ---
 
-### Exp 2 — MNIST: Accuracy & ASR vs Number of Steps
+### Exp 2 — Accuracy & ASR vs Number of Steps (T)
 
-Fixed: `ε=0.1` (`steps_epsilon`). Test set: 1,280 samples, 1,273 correctly classified.
+Fixed: `ε=0.1` (`steps_epsilon`), evaluated on 1,280-sample subset.
 
-| T (steps) | Clean Acc | I-FGSM Acc | ASR | Accuracy Drop |
+#### MNIST — 1,273 correctly classified
+
+| T | I-FGSM Acc | ASR | Accuracy Drop | Time |
 |---|---|---|---|---|
-| 5  | 99.45% | 26.64% | 73.2% | −72.81 pp |
-| 10 | 99.45% | 21.25% | 78.6% | −78.20 pp |
-| 20 | 99.45% | 18.20% | 81.7% | −81.25 pp |
-| 40 | 99.45% | 16.56% | 83.4% | −82.89 pp |
+| 5  | 26.64% | 73.2% | −72.81 pp | 15.7s |
+| 10 | 21.25% | 78.6% | −78.20 pp | 32.5s |
+| 20 | 18.20% | 81.7% | −81.25 pp | 63.8s |
+| 40 | 16.56% | 83.4% | −82.89 pp | 126.4s |
 
 **Key takeaways:**
 - Attack strength increases with T but with **diminishing returns**: T=5→10 gains 5.4 pp, T=20→40 gains only 1.6 pp.
-- At T=40 the attack approaches convergence — more iterations yield minimal gain.
+- At T=40 the attack approaches convergence — doubling steps from 20→40 gains less than 2 pp.
 
 ![Exp2 MNIST](results/figures/exp2_acc_vs_steps_mnist.png)
 
+#### CIFAR-10 — 973 correctly classified
+
+| T | I-FGSM Acc | ASR | Accuracy Drop | Time |
+|---|---|---|---|---|
+| 5  | 2.81% | 96.3% | −73.20 pp | 10.5s |
+| 10 | 2.34% | 96.9% | −73.67 pp | 21.0s |
+| 20 | 1.72% | 97.7% | −74.30 pp | 42.1s |
+| 40 | 1.64% | 97.8% | −74.38 pp | 84.1s |
+
+**Key takeaways:**
+- CIFAR-10 converges **much faster** than MNIST: already 96.3% ASR at T=5 vs. 73.2% for MNIST.
+- Going from T=5→40 gains only 1.5 pp on CIFAR-10 — the optimal T is effectively ≤5 for this model.
+- Time scales linearly with T as expected (~10s per 5 steps on CPU).
+
+![Exp2 CIFAR-10](results/figures/exp2_acc_vs_steps_cifar10.png)
+
 ---
 
-### Exp 3 — MNIST: Adversarial Example Visualization
+### Exp 3 — Adversarial Example Visualization
 
 All visualizations are generated from correctly classified samples only.
+
+#### MNIST
 
 **Side-by-side comparison** — original | perturbation (×10) | adversarial:
 
 ![Exp3 Examples MNIST](results/figures/exp3_examples_mnist.png)
 
-**Prediction probability bar charts** — softmax probabilities before (blue) and after (red) attack. True label outlined in black:
+**Prediction probability bar charts** — softmax before (blue) and after (red) attack. True label outlined in black:
 
 ![Exp3 Prediction Probs MNIST](results/figures/exp3_pred_probs_mnist.png)
 
-Before the attack, the model assigns ~100% confidence to the correct class. After, that confidence shifts entirely to a wrong class — also with ~100% certainty.
+Before attack the model assigns ~100% confidence to the correct class. After, that confidence shifts entirely to a wrong class — also with ~100% certainty.
 
 **Loss evolution** — cross-entropy rising across I-FGSM iterations:
 
 ![Exp3 Loss Evolution MNIST](results/figures/exp3_loss_evolution_mnist.png)
+
+#### CIFAR-10
+
+![Exp3 Examples CIFAR-10](results/figures/exp3_examples_cifar10.png)
+
+![Exp3 Prediction Probs CIFAR-10](results/figures/exp3_pred_probs_cifar10.png)
+
+![Exp3 Loss Evolution CIFAR-10](results/figures/exp3_loss_evolution_cifar10.png)
+
+---
+
+### Exp 4 — Presentation Grids
+
+#### MNIST — Epsilon sweep (T=40)
+
+![Exp4 Epsilon Grid MNIST](results/figures/exp4_grid_epsilon_mnist.png)
+
+#### MNIST — Steps sweep (ε=0.1)
+
+![Exp4 Steps Grid MNIST](results/figures/exp4_grid_steps_mnist.png)
+
+#### CIFAR-10 — Epsilon sweep (T=40)
+
+![Exp4 Epsilon Grid CIFAR-10](results/figures/exp4_grid_epsilon_cifar10.png)
+
+#### CIFAR-10 — Steps sweep (ε=0.1)
+
+![Exp4 Steps Grid CIFAR-10](results/figures/exp4_grid_steps_cifar10.png)
 
 ---
 
