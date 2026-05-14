@@ -117,17 +117,20 @@ ifgsm_project/
 │   ├── trainer.py            # Training loop: checkpoint saving, tqdm progress, history
 │   ├── evaluator.py          # 2-phase adversarial evaluation
 │   │                         # Reports: accuracy, ASR, timing, perturbation norms
-│   └── visualization.py      # 5 plot types:
+│   └── visualization.py      # 7 plot types:
 │                             #   plot_training_history
 │                             #   plot_accuracy_vs_epsilon
 │                             #   plot_accuracy_vs_steps
 │                             #   plot_adversarial_examples
-│                             #   plot_prediction_probs  (softmax bar charts)
+│                             #   plot_prediction_probs   (softmax bar charts)
+│                             #   plot_epsilon_grid       (presentation: ε sweep)
+│                             #   plot_steps_grid         (presentation: T sweep)
 │
 ├── experiments/
 │   ├── exp1_epsilon.py       # Sweep ε → accuracy + ASR + timing  (FGSM & I-FGSM)
 │   ├── exp2_steps.py         # Sweep T → accuracy + ASR           (I-FGSM, steps_epsilon)
-│   └── exp3_visualize.py     # Images + perturbation + prediction probability charts
+│   ├── exp3_visualize.py     # Images + perturbation + prediction probability charts
+│   └── exp4_presentation.py  # Presentation grids: ε-sweep & T-sweep side-by-side
 │
 ├── configs/
 │   └── config.yaml           # All hyperparameters in one place
@@ -325,6 +328,7 @@ python main.py --dataset ImageNette --model MobileNetV2 --skip-train
 
 # Run only specific experiments (e.g. 1 and 3)
 python main.py --dataset MNIST --skip-train --exp 1 3
+python main.py --dataset MNIST --skip-train --exp 4          # presentation grids
 python main.py --dataset ImageNette --model MobileNetV2 --skip-train --exp 1 2
 ```
 
@@ -356,9 +360,14 @@ python -c "from experiments.exp1_epsilon import run; run('configs/config.yaml', 
 python -c "from experiments.exp2_steps import run; run('configs/config.yaml', dataset='MNIST')"
 python -c "from experiments.exp2_steps import run; run('configs/config.yaml', dataset='ImageNette', model='MobileNetV2')"
 
-# Exp3 — visualization
+# Exp3 — visualization (side-by-side + probability charts + loss curve)
 python -c "from experiments.exp3_visualize import run; run('configs/config.yaml', dataset='CIFAR10')"
 python -c "from experiments.exp3_visualize import run; run('configs/config.yaml', dataset='ImageNette', model='MobileNetV2')"
+
+# Exp4 — presentation grids (epsilon sweep + steps sweep)
+python -c "from experiments.exp4_presentation import run; run('configs/config.yaml', dataset='MNIST')"
+python -c "from experiments.exp4_presentation import run; run('configs/config.yaml', dataset='CIFAR10')"
+python -c "from experiments.exp4_presentation import run; run('configs/config.yaml', dataset='ImageNette', model='MobileNetV2')"
 ```
 
 ### Run unit tests
@@ -554,6 +563,44 @@ Generates three visualizations from a batch of correctly classified samples:
 | Example grid | `results/figures/exp3_examples_{dataset}.png` |
 | Probability charts | `results/figures/exp3_pred_probs_{dataset}.png` |
 | Loss curve | `results/figures/exp3_loss_evolution_{dataset}.png` |
+
+---
+
+### Exp 4 — Presentation Comparison Grid
+
+**File:** `experiments/exp4_presentation.py`
+
+Designed for presentations — generates two high-level comparison grids on correctly classified samples, making it easy to see visually how ε and T affect the adversarial image and the model's prediction.
+
+**Grid 1 — Epsilon sweep** (fixed T from `attack.num_steps`):
+
+```
+             Original | ε=0.05 | ε=0.10 | ε=0.20 | ε=0.25 | ε=0.30
+Sample GT:7  [image]  | ✓ 98%  | ✗ 72%  | ✗ 99%  | ✗ 100% | ✗ 100%
+Sample GT:2  [image]  | ✓ 95%  | ✗ 88%  | ✗ 99%  | ✗ 100% | ✗ 100%
+```
+
+Shows at which ε the model starts predicting wrong, and how confidence shifts.
+
+**Grid 2 — Steps sweep** (fixed ε from `experiment.steps_epsilon`):
+
+```
+             Original | T=1 (FGSM) | T=5   | T=10  | T=20  | T=40
+Sample GT:7  [image]  | ✓ 61%      | ✗ 83% | ✗ 97% | ✗ 99% | ✗ 100%
+Sample GT:2  [image]  | ✓ 78%      | ✗ 91% | ✗ 98% | ✗ 99% | ✗ 100%
+```
+
+T=1 is effectively FGSM (one gradient step). Shows how each additional step tightens the attack.
+
+Each cell shows: predicted class name (green ✓ = correct, red ✗ = wrong) + confidence %.
+Images are automatically denormalized to `[0, 1]` for display regardless of dataset normalization.
+
+**Output files:**
+
+| Type | Path |
+|---|---|
+| Epsilon grid | `results/figures/exp4_grid_epsilon_{dataset_model}.png` |
+| Steps grid | `results/figures/exp4_grid_steps_{dataset_model}.png` |
 
 ---
 

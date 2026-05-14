@@ -16,22 +16,45 @@ from typing import List, Dict, Optional
 SAVE_DIR = "./results/figures"
 os.makedirs(SAVE_DIR, exist_ok=True)
 
+# Normalization params — dùng để denorm ảnh về [0,1] khi hiển thị
+_NORM_PARAMS = {
+    "CIFAR10":    {"mean": (0.4914, 0.4822, 0.4465), "std": (0.2470, 0.2435, 0.2616)},
+    "IMAGENETTE": {"mean": (0.485,  0.456,  0.406),  "std": (0.229,  0.224,  0.225)},
+}
+
 
 # ─────────────────────────────────────────────────────────────
-# Helper
+# Helpers
 # ─────────────────────────────────────────────────────────────
+
+def _denormalize(tensor: torch.Tensor, dataset_name: str) -> torch.Tensor:
+    """Đảo normalization về [0,1] để hiển thị. MNIST không cần denorm."""
+    key = dataset_name.upper()
+    if key not in _NORM_PARAMS:
+        return tensor.clamp(0, 1)
+    p    = _NORM_PARAMS[key]
+    mean = torch.tensor(p["mean"], dtype=tensor.dtype).view(-1, 1, 1)
+    std  = torch.tensor(p["std"],  dtype=tensor.dtype).view(-1, 1, 1)
+    return (tensor * std + mean).clamp(0, 1)
 
 def _to_numpy(t: torch.Tensor) -> np.ndarray:
-    """Tensor [C,H,W] hoặc [H,W] → numpy uint8 [H,W,C] hoặc [H,W]."""
+    """Tensor [C,H,W] hoặc [H,W] → numpy [H,W,C] hoặc [H,W]."""
     img = t.detach().cpu().clamp(0, 1).numpy()
     if img.ndim == 3:
-        img = img.transpose(1, 2, 0)   # CHW → HWC
+        img = img.transpose(1, 2, 0)
     return img
 
 def _label_name(idx: int, class_names: Optional[List[str]] = None) -> str:
     if class_names:
         return class_names[idx]
     return str(idx)
+
+def _show_img(ax, tensor: torch.Tensor, dataset_name: str) -> None:
+    """Hiển thị 1 ảnh (có denorm), tự nhận grayscale hay RGB."""
+    img = _to_numpy(_denormalize(tensor.cpu(), dataset_name))
+    cmap = "gray" if img.ndim == 2 or img.shape[2] == 1 else None
+    ax.imshow(img.squeeze(), cmap=cmap)
+    ax.axis("off")
 
 
 # ─────────────────────────────────────────────────────────────
@@ -389,6 +412,180 @@ def plot_loss_evolution(
 
     plt.tight_layout()
     _save_or_show(fig, save_path or os.path.join(SAVE_DIR, "loss_evolution.png"))
+
+
+# ─────────────────────────────────────────────────────────────
+# 6. So sánh adversarial ở nhiều mức Epsilon (presentation grid)
+# ─────────────────────────────────────────────────────────────
+
+def plot_epsilon_grid(
+    model        : "torch.nn.Module",
+    images       : "torch.Tensor",
+    labels       : List[int],
+    epsilon_list : List[float],
+    num_steps    : int,
+    dataset_name : str                 = "",
+    class_names  : Optional[List[str]] = None,
+    n_samples    : int                 = 5,
+    save_path    : Optional[str]       = None,
+) -> None:
+    """
+    Grid presentation: hàng = mẫu ảnh, cột = Original + mỗi epsilon.
+
+    Mỗi ô adversarial hiển thị:
+      - Ảnh bị tấn công
+      - Nhãn dự đoán (xanh=đúng, đỏ=sai) + confidence %
+    """
+    import torch.nn.functional as F
+    from attacks.ifgsm import IFGSMAttack
+    from utils.data_loader import get_clip_values
+
+    model.eval()
+    device    = next(model.parameters()).device
+    n         = min(n_samples, images.size(0))
+    imgs      = images[:n].to(device)
+    lbls      = torch.tensor(labels[:n], device=device)
+    clip_min, clip_max = get_clip_values(dataset_name)
+
+    n_cols = len(epsilon_list) + 1          # Original + K epsilons
+    fig, axes = plt.subplots(n, n_cols, figsize=(2.6 * n_cols, 2.8 * n))
+
+    if n == 1:
+        axes = axes[np.newaxis, :]
+
+    # Header cột
+    axes[0, 0].set_title("Original", fontsize=10, fontweight="bold", pad=6)
+    for j, eps in enumerate(epsilon_list):
+        axes[0, j + 1].set_title(f"ε = {eps}", fontsize=10, fontweight="bold", pad=6)
+
+    # Lấy dự đoán clean 1 lần
+    with torch.no_grad():
+        clean_preds = model(imgs).argmax(1).cpu().tolist()
+
+    for i in range(n):
+        # Cột 0: ảnh gốc
+        _show_img(axes[i, 0], imgs[i], dataset_name)
+        axes[i, 0].set_ylabel(
+            f"GT: {_label_name(labels[i], class_names)}", fontsize=8,
+            rotation=0, labelpad=60, va="center",
+        )
+
+        # Cột 1..K: adversarial tại từng epsilon
+        for j, eps in enumerate(epsilon_list):
+            attacker = IFGSMAttack(model, epsilon=eps, num_steps=num_steps,
+                                   clip_min=clip_min, clip_max=clip_max)
+            adv = attacker(imgs[i:i+1], lbls[i:i+1])
+
+            with torch.no_grad():
+                logits = model(adv)
+                probs  = F.softmax(logits, dim=1)
+                pred   = int(logits.argmax(1).item())
+                conf   = float(probs[0, pred].item()) * 100
+
+            _show_img(axes[i, j + 1], adv[0], dataset_name)
+
+            correct = (pred == labels[i])
+            color   = "green" if correct else "red"
+            mark    = "✓" if correct else "✗"
+            axes[i, j + 1].set_title(
+                f"{mark} {_label_name(pred, class_names)}\n{conf:.1f}%",
+                fontsize=8, color=color,
+            )
+
+    ds_title = f" — {dataset_name}" if dataset_name else ""
+    fig.suptitle(
+        f"Ảnh đối kháng I-FGSM theo ε{ds_title}  (T={num_steps} bước)\n"
+        f"Xanh = dự đoán đúng  |  Đỏ = dự đoán sai",
+        fontsize=12, fontweight="bold", y=1.02,
+    )
+
+    plt.tight_layout()
+    _save_or_show(fig, save_path or os.path.join(SAVE_DIR, f"grid_epsilon_{dataset_name.lower()}.png"))
+
+
+# ─────────────────────────────────────────────────────────────
+# 7. So sánh adversarial ở nhiều mức Steps T (presentation grid)
+# ─────────────────────────────────────────────────────────────
+
+def plot_steps_grid(
+    model        : "torch.nn.Module",
+    images       : "torch.Tensor",
+    labels       : List[int],
+    steps_list   : List[int],
+    epsilon      : float,
+    dataset_name : str                 = "",
+    class_names  : Optional[List[str]] = None,
+    n_samples    : int                 = 5,
+    save_path    : Optional[str]       = None,
+) -> None:
+    """
+    Grid presentation: hàng = mẫu ảnh, cột = Original + mỗi giá trị T.
+
+    T=1 tương đương FGSM (1 bước), các T lớn hơn là I-FGSM.
+    """
+    import torch.nn.functional as F
+    from attacks.ifgsm import IFGSMAttack
+    from utils.data_loader import get_clip_values
+
+    model.eval()
+    device    = next(model.parameters()).device
+    n         = min(n_samples, images.size(0))
+    imgs      = images[:n].to(device)
+    lbls      = torch.tensor(labels[:n], device=device)
+    clip_min, clip_max = get_clip_values(dataset_name)
+
+    n_cols = len(steps_list) + 1
+    fig, axes = plt.subplots(n, n_cols, figsize=(2.6 * n_cols, 2.8 * n))
+
+    if n == 1:
+        axes = axes[np.newaxis, :]
+
+    # Header cột
+    axes[0, 0].set_title("Original", fontsize=10, fontweight="bold", pad=6)
+    for j, T in enumerate(steps_list):
+        label = f"T={T}\n(FGSM)" if T == 1 else f"T={T}"
+        axes[0, j + 1].set_title(label, fontsize=10, fontweight="bold", pad=6)
+
+    with torch.no_grad():
+        clean_preds = model(imgs).argmax(1).cpu().tolist()
+
+    for i in range(n):
+        _show_img(axes[i, 0], imgs[i], dataset_name)
+        axes[i, 0].set_ylabel(
+            f"GT: {_label_name(labels[i], class_names)}", fontsize=8,
+            rotation=0, labelpad=60, va="center",
+        )
+
+        for j, T in enumerate(steps_list):
+            attacker = IFGSMAttack(model, epsilon=epsilon, num_steps=T,
+                                   clip_min=clip_min, clip_max=clip_max)
+            adv = attacker(imgs[i:i+1], lbls[i:i+1])
+
+            with torch.no_grad():
+                logits = model(adv)
+                probs  = F.softmax(logits, dim=1)
+                pred   = int(logits.argmax(1).item())
+                conf   = float(probs[0, pred].item()) * 100
+
+            _show_img(axes[i, j + 1], adv[0], dataset_name)
+
+            correct = (pred == labels[i])
+            color   = "green" if correct else "red"
+            mark    = "✓" if correct else "✗"
+            axes[i, j + 1].set_title(
+                f"{mark} {_label_name(pred, class_names)}\n{conf:.1f}%",
+                fontsize=8, color=color,
+            )
+
+    ds_title = f" — {dataset_name}" if dataset_name else ""
+    fig.suptitle(
+        f"Ảnh đối kháng I-FGSM theo số bước T{ds_title}  (ε={epsilon})\n"
+        f"Xanh = dự đoán đúng  |  Đỏ = dự đoán sai",
+        fontsize=12, fontweight="bold", y=1.02,
+    )
+
+    plt.tight_layout()
+    _save_or_show(fig, save_path or os.path.join(SAVE_DIR, f"grid_steps_{dataset_name.lower()}.png"))
 
 
 # ─────────────────────────────────────────────────────────────
