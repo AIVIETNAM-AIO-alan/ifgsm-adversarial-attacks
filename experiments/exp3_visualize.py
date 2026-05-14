@@ -21,7 +21,7 @@ sys.path.insert(0, ROOT)
 import torch
 import yaml
 
-from models              import SimpleCNN, get_resnet18_imagenette
+from models              import SimpleCNN, get_resnet18_imagenette, get_mobilenetv2_imagenette
 from attacks.ifgsm       import IFGSMAttack
 from utils.data_loader   import get_dataloaders, get_in_channels, get_input_size, get_clip_values
 from utils.visualization import (
@@ -63,12 +63,20 @@ def run(config_path: str = "../configs/config.yaml", dataset: str = None):
     # ── Load model ────────────────────────────────────────────
     in_ch      = get_in_channels(ds_name)
     input_size = get_input_size(ds_name)
-    if ds_name.upper() == "IMAGENETTE":
-        model = get_resnet18_imagenette(num_classes=10)
-    else:
-        model = SimpleCNN(in_channels=in_ch, num_classes=10, input_size=input_size)
+    model_arch = cfg["model"]["name"]
 
-    ckpt_path = os.path.join(cfg["train"]["save_dir"], f"{ds_name.lower()}_best.pth")
+    if ds_name.upper() == "IMAGENETTE":
+        if model_arch == "MobileNetV2":
+            model    = get_mobilenetv2_imagenette(num_classes=10)
+            ckpt_tag = "imagenette_mobilenetv2"
+        else:
+            model    = get_resnet18_imagenette(num_classes=10)
+            ckpt_tag = "imagenette_resnet18"
+    else:
+        model    = SimpleCNN(in_channels=in_ch, num_classes=10, input_size=input_size)
+        ckpt_tag = ds_name.lower()
+
+    ckpt_path = os.path.join(cfg["train"]["save_dir"], f"{ckpt_tag}_best.pth")
     if not os.path.exists(ckpt_path):
         print(f"  [WARNING] Không tìm thấy checkpoint. Chạy train.py --dataset {ds_name} trước!")
         return

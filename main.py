@@ -39,6 +39,11 @@ def parse_args():
         choices=["MNIST", "CIFAR10", "ImageNette", "both"],
         help="Dataset để chạy: MNIST | CIFAR10 | ImageNette | both (mặc định: MNIST)",
     )
+    parser.add_argument(
+        "--model", type=str, default=None,
+        choices=["SimpleCNN", "ResNet18", "MobileNetV2"],
+        help="Override model: SimpleCNN | ResNet18 | MobileNetV2 (MobileNetV2 chỉ dùng với ImageNette)",
+    )
     parser.add_argument("--skip-train", action="store_true",
                         help="Bỏ qua bước train (cần checkpoint có sẵn)")
     parser.add_argument("--exp",        nargs="*", type=int,
@@ -90,6 +95,8 @@ def main():
             print_header(f"[{ds_name}] Bước 1: Huấn luyện Model")
             from train import main as train_main
             sys.argv = ["train.py", "--config", args.config, "--dataset", ds_name]
+            if args.model:
+                sys.argv += ["--model", args.model]
             t0 = time.time()
             train_main()
             print(f"  Hoàn tất train ({time.time()-t0:.1f}s)")

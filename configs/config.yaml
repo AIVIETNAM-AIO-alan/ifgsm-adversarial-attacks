@@ -5,7 +5,7 @@
 
 # --- Dataset ---
 dataset:
-  name: "MNIST"           # MNIST | CIFAR10
+  name: "MNIST"           # MNIST | CIFAR10 | ImageNette
   root: "./data"
   batch_size: 64
   num_workers: 2
@@ -13,7 +13,7 @@ dataset:
 
 # --- Model ---
 model:
-  name: "SimpleCNN"       # SimpleCNN | ResNet18
+  name: "SimpleCNN"       # SimpleCNN | ResNet18 | MobileNetV2 (MobileNetV2 chỉ dùng với ImageNette)
   num_classes: 10
   pretrained: false
   checkpoint: null        # path to checkpoint nếu có

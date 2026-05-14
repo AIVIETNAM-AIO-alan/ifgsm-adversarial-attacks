@@ -1,6 +1,6 @@
 # I-FGSM Adversarial Attack — Image Classifier
 
-Implementation of **FGSM** and **I-FGSM (Iterative Fast Gradient Sign Method)** adversarial attacks on image classifiers, supporting **MNIST**, **CIFAR-10**, and **ImageNette** (pretrained ResNet-18), with full training, evaluation, and visualization pipelines.
+Implementation of **FGSM** and **I-FGSM (Iterative Fast Gradient Sign Method)** adversarial attacks on image classifiers, supporting **MNIST**, **CIFAR-10**, and **ImageNette** (pretrained ResNet-18 & MobileNetV2), with full training, evaluation, and visualization pipelines.
 
 > Paper: *Adversarial Examples in the Physical World* — Kurakin, Goodfellow & Bengio (2016)
 > https://arxiv.org/abs/1607.02533
@@ -170,7 +170,8 @@ python main.py
 # Choose dataset
 python main.py --dataset MNIST
 python main.py --dataset CIFAR10
-python main.py --dataset ImageNette    # pretrained ResNet-18, auto-download ~1.5 GB
+python main.py --dataset ImageNette                      # ResNet-18 (mặc định)
+python main.py --dataset ImageNette --model MobileNetV2  # MobileNetV2
 python main.py --dataset both          # MNIST + CIFAR-10 sequentially
 
 # Skip training (reuse saved checkpoints)
@@ -191,8 +192,11 @@ python train.py
 # Train SimpleCNN on CIFAR-10
 python train.py --dataset CIFAR10
 
-# Train pretrained ResNet-18 on ImageNette (auto-downloads dataset)
+# Train pretrained ResNet-18 on ImageNette (mặc định, auto-downloads dataset)
 python train.py --dataset ImageNette
+
+# Train pretrained MobileNetV2 on ImageNette
+python train.py --dataset ImageNette --model MobileNetV2
 
 # Train with ResNet-18 on MNIST or CIFAR-10
 python train.py --model ResNet18
@@ -309,17 +313,46 @@ python train.py --dataset CIFAR10 --model ResNet18
 
 ### ResNet-18 (pretrained, for ImageNette)
 
-For ImageNette, the project uses a **pretrained ResNet-18** fine-tuned on the 10 ImageNette classes:
+For ImageNette, the project supports **pretrained ResNet-18** fine-tuned on the 10 ImageNette classes:
 
 - Initialized with `ResNet18_Weights.IMAGENET1K_V1` (ImageNet-pretrained weights).
 - Only the final fully-connected layer is replaced: `Linear(512 → 10)`.
 - Input: standard 224×224 RGB images with ImageNet normalization.
-- **Selected automatically** when `--dataset ImageNette` is used — no `--model` flag needed.
+- **Default model for ImageNette** when `--model` is not specified.
 
 ```python
 from models import get_resnet18_imagenette
 model = get_resnet18_imagenette(num_classes=10)
 ```
+
+### MobileNetV2 (pretrained, for ImageNette)
+
+An alternative to ResNet-18 for ImageNette — lighter and faster while remaining competitive:
+
+| | MobileNetV2 | ResNet-18 |
+|---|---|---|
+| Params | ~3.4M | ~11.7M |
+| ImageNet Top-1 | 71.9% | 69.8% |
+| Architecture | Inverted residuals + linear bottleneck | Residual blocks |
+| Speed | Faster inference | Slower |
+
+- Initialized with `MobileNet_V2_Weights.IMAGENET1K_V1`.
+- Classifier head replaced: `model.classifier[1] = Linear(1280 → 10)`.
+- Same input requirements as ResNet-18: 224×224 + ImageNet normalization.
+- Checkpoints saved separately — **no conflict** with ResNet-18 checkpoints.
+
+```python
+from models import get_mobilenetv2_imagenette
+model = get_mobilenetv2_imagenette(num_classes=10)
+```
+
+**Checkpoint naming for ImageNette** (to avoid collision between architectures):
+
+| Model | Checkpoint file |
+|---|---|
+| ResNet-18 | `results/checkpoints/imagenette_resnet18_best.pth` |
+| MobileNetV2 | `results/checkpoints/imagenette_mobilenetv2_best.pth` |
+| MNIST / CIFAR-10 | `results/checkpoints/mnist_best.pth` / `cifar10_best.pth` (unchanged) |
 
 ---
 
@@ -530,8 +563,8 @@ dataset:
   num_workers: 2
 
 model:
-  name: "SimpleCNN"       # SimpleCNN | ResNet18
-                          # (ImageNette always uses pretrained ResNet-18 automatically)
+  name: "SimpleCNN"       # SimpleCNN | ResNet18 | MobileNetV2
+                          # MobileNetV2 chỉ dùng với ImageNette
 
 train:
   epochs: 20

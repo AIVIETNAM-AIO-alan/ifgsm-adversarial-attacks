@@ -16,7 +16,7 @@ import torch
 import torch.optim as optim
 import yaml
 
-from models            import SimpleCNN, get_resnet18, get_resnet18_imagenette
+from models            import SimpleCNN, get_resnet18, get_resnet18_imagenette, get_mobilenetv2_imagenette
 from utils.data_loader import get_dataloaders, get_in_channels, get_input_size
 from utils.trainer     import Trainer
 from utils.visualization import plot_training_history
@@ -78,18 +78,23 @@ def main():
     model_name = cfg["model"]["name"]
 
     if ds_name.upper() == "IMAGENETTE":
-        # ImageNette luôn dùng pretrained ResNet-18 (SimpleCNN quá nhỏ cho 224×224)
-        model = get_resnet18_imagenette(num_classes=10)
-        print(f"Model: ResNet-18 (pretrained ImageNet) | Params: {sum(p.numel() for p in model.parameters()):,}")
+        if model_name == "MobileNetV2":
+            model    = get_mobilenetv2_imagenette(num_classes=10)
+            save_tag = "imagenette_mobilenetv2"
+        else:
+            model    = get_resnet18_imagenette(num_classes=10)
+            save_tag = "imagenette_resnet18"
     elif model_name == "SimpleCNN":
-        model = SimpleCNN(in_channels=in_ch, num_classes=10, input_size=input_size)
+        model    = SimpleCNN(in_channels=in_ch, num_classes=10, input_size=input_size)
+        save_tag = ds_name.lower()
     elif model_name == "ResNet18":
-        model = get_resnet18(in_channels=in_ch, num_classes=10)
+        model    = get_resnet18(in_channels=in_ch, num_classes=10)
+        save_tag = ds_name.lower()
     else:
         raise ValueError(f"Unknown model: {model_name}")
 
     n_params = sum(p.numel() for p in model.parameters())
-    print(f"Model: {model_name} | Params: {n_params:,}")
+    print(f"Model: {model_name} | Params: {n_params:,} | Checkpoint tag: {save_tag}")
 
     # ── Optimizer & Scheduler ─────────────────────────────────
     lr = cfg["train"]["lr"]
@@ -122,22 +127,22 @@ def main():
         train_loader = train_loader,
         val_loader   = val_loader,
         epochs       = cfg["train"]["epochs"],
-        model_name   = ds_name.lower(),
+        model_name   = save_tag,
     )
 
     # ── Evaluate trên test set ────────────────────────────────
     print("\n── Đánh giá trên Test set ──")
-    trainer.load_checkpoint(f"{ds_name.lower()}_best.pth")
+    trainer.load_checkpoint(f"{save_tag}_best.pth")
     trainer.evaluate(test_loader)
 
     # ── Vẽ training history ───────────────────────────────────
     os.makedirs("results/figures", exist_ok=True)
     plot_training_history(
         history,
-        save_path=f"results/figures/training_history_{ds_name.lower()}.png"
+        save_path=f"results/figures/training_history_{save_tag}.png"
     )
 
-    print(f"\n✓ Checkpoint lưu tại: {save_dir}/{ds_name.lower()}_best.pth")
+    print(f"\n✓ Checkpoint lưu tại: {save_dir}/{save_tag}_best.pth")
 
 
 if __name__ == "__main__":
