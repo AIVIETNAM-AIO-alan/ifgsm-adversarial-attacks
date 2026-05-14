@@ -16,7 +16,7 @@ import torch
 import torch.optim as optim
 import yaml
 
-from models            import SimpleCNN, get_resnet18, get_resnet18_imagenette, get_mobilenetv2_imagenette
+from models            import SimpleCNN, get_resnet18, get_resnet18_imagenette, get_mobilenetv2_imagenette, get_mobilenetv2_cifar10
 from utils.data_loader import get_dataloaders, get_in_channels, get_input_size
 from utils.trainer     import Trainer
 from utils.visualization import plot_training_history
@@ -91,7 +91,10 @@ def main():
         save_tag = ds_name.lower()
     elif model_name == "ResNet18":
         model    = get_resnet18(in_channels=in_ch, num_classes=10)
-        save_tag = ds_name.lower()
+        save_tag = f"{ds_name.lower()}_resnet18"
+    elif model_name == "MobileNetV2":
+        model    = get_mobilenetv2_cifar10(num_classes=10)
+        save_tag = f"{ds_name.lower()}_mobilenetv2"
     else:
         raise ValueError(f"Unknown model: {model_name}")
 

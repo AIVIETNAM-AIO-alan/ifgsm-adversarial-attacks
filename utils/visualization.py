@@ -589,6 +589,109 @@ def plot_steps_grid(
 
 
 # ─────────────────────────────────────────────────────────────
+# 8. Transfer Attack Heatmap (Exp5)
+# ─────────────────────────────────────────────────────────────
+
+def plot_transfer_heatmap(
+    matrix_fgsm  : np.ndarray,
+    matrix_ifgsm : np.ndarray,
+    model_names  : List[str],
+    epsilon      : float,
+    save_path    : Optional[str] = None,
+) -> None:
+    """
+    Heatmap 2 bảng (FGSM + I-FGSM) cho Cross-Architecture Transfer.
+
+    Hàng = Source model (sinh ảnh đối kháng).
+    Cột  = Target model (bị tấn công, không biết nguồn gốc ảnh).
+    Đường chéo = White-box, ngoài đường chéo = Transfer (black-box).
+    """
+    n = len(model_names)
+    fig, axes = plt.subplots(1, 2, figsize=(6 * n + 1, 4 + n))
+
+    for ax, matrix, title in zip(
+        axes,
+        [matrix_fgsm, matrix_ifgsm],
+        [f"FGSM  (ε={epsilon})", f"I-FGSM  (ε={epsilon})"],
+    ):
+        im = ax.imshow(matrix, cmap="RdYlGn_r", vmin=0, vmax=100, aspect="auto")
+        ax.set_xticks(range(n))
+        ax.set_yticks(range(n))
+        ax.set_xticklabels(model_names, fontsize=10)
+        ax.set_yticklabels(model_names, fontsize=10)
+        ax.set_xlabel("Target Model (bị tấn công)", fontsize=11)
+        ax.set_ylabel("Source Model (sinh nhiễu)", fontsize=11)
+        ax.set_title(title, fontsize=12, fontweight="bold", pad=10)
+        plt.colorbar(im, ax=ax, label="ASR (%)", fraction=0.046, pad=0.04)
+
+        for i in range(n):
+            for j in range(n):
+                tag  = "[WB]" if i == j else "[→]"
+                val  = matrix[i, j]
+                color = "white" if val > 55 else "black"
+                ax.text(j, i, f"{val:.1f}%\n{tag}",
+                        ha="center", va="center",
+                        fontsize=10, fontweight="bold", color=color)
+
+    fig.suptitle(
+        "Cross-Architecture Transfer Attack — CIFAR-10\n"
+        "WB = White-box (source=target)  |  → = Transfer (black-box)",
+        fontsize=13, fontweight="bold",
+    )
+    plt.tight_layout()
+    _save_or_show(fig, save_path or os.path.join(SAVE_DIR, f"exp5_transfer_heatmap_eps{epsilon}.png"))
+
+
+def plot_transfer_lines(
+    results      : Dict,
+    model_names  : List[str],
+    epsilon_list : List[float],
+    save_path    : Optional[str] = None,
+) -> None:
+    """
+    Line chart: Transfer ASR vs Epsilon cho tất cả (source→target) pairs.
+    Đường liền = White-box, đường đứt = Transfer.
+    """
+    cmap   = plt.cm.tab10(np.linspace(0, 0.9, len(model_names)))
+    colors = {name: cmap[i] for i, name in enumerate(model_names)}
+
+    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+
+    for ax, attack_key, attack_label in zip(
+        axes, ["fgsm", "ifgsm"], ["FGSM", "I-FGSM"]
+    ):
+        for src in model_names:
+            for tgt in model_names:
+                asr_list = results[src][tgt][attack_key]
+                is_wb    = (src == tgt)
+                label    = f"{src}→{tgt} ({'WB' if is_wb else 'Transfer'})"
+                ax.plot(
+                    epsilon_list, asr_list,
+                    color     = colors[src],
+                    linestyle = "-" if is_wb else "--",
+                    linewidth = 2.5 if is_wb else 1.8,
+                    marker    = "o" if is_wb else "s",
+                    markersize= 7,
+                    label     = label,
+                )
+
+        ax.set_xlabel("Epsilon (ε)", fontsize=11)
+        ax.set_ylabel("ASR (%)", fontsize=11)
+        ax.set_title(f"{attack_label}: Transfer ASR vs Epsilon",
+                     fontsize=12, fontweight="bold")
+        ax.legend(fontsize=8, loc="upper left")
+        ax.grid(True, alpha=0.3)
+        ax.set_ylim(0, 105)
+        ax.set_xticks(epsilon_list)
+
+    fig.suptitle("Cross-Architecture Transfer — CIFAR-10\n"
+                 "Đường liền = White-box  |  Đường đứt = Transfer (black-box)",
+                 fontsize=13, fontweight="bold")
+    plt.tight_layout()
+    _save_or_show(fig, save_path or os.path.join(SAVE_DIR, "exp5_transfer_asr_vs_epsilon.png"))
+
+
+# ─────────────────────────────────────────────────────────────
 # Helper lưu file
 # ─────────────────────────────────────────────────────────────
 
