@@ -79,11 +79,13 @@ def main():
 
     if ds_name.upper() == "IMAGENETTE":
         if model_name == "MobileNetV2":
-            model    = get_mobilenetv2_imagenette(num_classes=10)
-            save_tag = "imagenette_mobilenetv2"
+            model      = get_mobilenetv2_imagenette(num_classes=10)
+            save_tag   = "imagenette_mobilenetv2"
+            model_name = "MobileNetV2"
         else:
-            model    = get_resnet18_imagenette(num_classes=10)
-            save_tag = "imagenette_resnet18"
+            model      = get_resnet18_imagenette(num_classes=10)
+            save_tag   = "imagenette_resnet18"
+            model_name = "ResNet18"
     elif model_name == "SimpleCNN":
         model    = SimpleCNN(in_channels=in_ch, num_classes=10, input_size=input_size)
         save_tag = ds_name.lower()
