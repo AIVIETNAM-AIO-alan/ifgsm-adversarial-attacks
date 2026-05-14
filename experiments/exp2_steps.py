@@ -33,12 +33,14 @@ from utils.visualization import plot_accuracy_vs_steps
 from models              import SimpleCNN, get_resnet18_imagenette, get_mobilenetv2_imagenette
 
 
-def run(config_path: str = "../configs/config.yaml", dataset: str = None):
+def run(config_path: str = "../configs/config.yaml", dataset: str = None, model: str = None):
     with open(config_path) as f:
         cfg = yaml.safe_load(f)
 
     if dataset:
         cfg["dataset"]["name"] = dataset
+    if model:
+        cfg["model"]["name"] = model
 
     device = torch.device(
         cfg["experiment"]["device"] if torch.cuda.is_available() else "cpu"

@@ -111,7 +111,7 @@ def main():
             title, run_fn = exp_map[exp_id]
             print_header(f"[{ds_name}] {title}")
             t0 = time.time()
-            run_fn(config_path=args.config, dataset=ds_name)
+            run_fn(config_path=args.config, dataset=ds_name, model=args.model)
             print(f"  Hoàn tất ({time.time()-t0:.1f}s)")
 
     # ── Tổng kết ──────────────────────────────────────────────
