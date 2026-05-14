@@ -1,0 +1,42 @@
+[
+  {
+    "num_steps": 5,
+    "total_test": 1280,
+    "n_correct": 973,
+    "clean_acc": 76.015625,
+    "adv_acc": 2.8125,
+    "acc_drop": 73.203125,
+    "asr": 96.30010277492292,
+    "attack_time_s": 10.508
+  },
+  {
+    "num_steps": 10,
+    "total_test": 1280,
+    "n_correct": 973,
+    "clean_acc": 76.015625,
+    "adv_acc": 2.34375,
+    "acc_drop": 73.671875,
+    "asr": 96.91675231243576,
+    "attack_time_s": 20.963
+  },
+  {
+    "num_steps": 20,
+    "total_test": 1280,
+    "n_correct": 973,
+    "clean_acc": 76.015625,
+    "adv_acc": 1.71875,
+    "acc_drop": 74.296875,
+    "asr": 97.73895169578623,
+    "attack_time_s": 42.125
+  },
+  {
+    "num_steps": 40,
+    "total_test": 1280,
+    "n_correct": 973,
+    "clean_acc": 76.015625,
+    "adv_acc": 1.640625,
+    "acc_drop": 74.375,
+    "asr": 97.84172661870504,
+    "attack_time_s": 84.126
+  }
+]

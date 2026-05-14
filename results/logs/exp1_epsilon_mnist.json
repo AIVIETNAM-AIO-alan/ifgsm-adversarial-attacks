@@ -1,50 +1,86 @@
 [
   {
     "epsilon": 0.05,
+    "total_test": 1280,
+    "n_correct": 1273,
     "clean_acc": 99.453125,
     "fgsm_acc": 94.53125,
     "ifgsm_acc": 85.234375,
     "fgsm_drop": 4.921875,
-    "ifgsm_drop": 14.21875
+    "ifgsm_drop": 14.21875,
+    "fgsm_asr": 4.948939512961508,
+    "ifgsm_asr": 14.29693637077769,
+    "fgsm_time_s": 3.164,
+    "ifgsm_time_s": 119.451
   },
   {
     "epsilon": 0.1,
+    "total_test": 1280,
+    "n_correct": 1273,
     "clean_acc": 99.453125,
     "fgsm_acc": 70.625,
     "ifgsm_acc": 16.5625,
     "fgsm_drop": 28.828125,
-    "ifgsm_drop": 82.890625
+    "ifgsm_drop": 82.890625,
+    "fgsm_asr": 28.986645718774547,
+    "ifgsm_asr": 83.34642576590731,
+    "fgsm_time_s": 2.935,
+    "ifgsm_time_s": 123.821
   },
   {
     "epsilon": 0.15,
+    "total_test": 1280,
+    "n_correct": 1273,
     "clean_acc": 99.453125,
     "fgsm_acc": 42.734375,
     "ifgsm_acc": 0.703125,
     "fgsm_drop": 56.71875,
-    "ifgsm_drop": 98.75
+    "ifgsm_drop": 98.75,
+    "fgsm_asr": 57.03063629222309,
+    "ifgsm_asr": 99.2930086410055,
+    "fgsm_time_s": 3.091,
+    "ifgsm_time_s": 126.486
   },
   {
     "epsilon": 0.2,
+    "total_test": 1280,
+    "n_correct": 1273,
     "clean_acc": 99.453125,
     "fgsm_acc": 25.15625,
     "ifgsm_acc": 0.0,
     "fgsm_drop": 74.296875,
-    "ifgsm_drop": 99.453125
+    "ifgsm_drop": 99.453125,
+    "fgsm_asr": 74.70542026708563,
+    "ifgsm_asr": 100.0,
+    "fgsm_time_s": 2.938,
+    "ifgsm_time_s": 128.083
   },
   {
     "epsilon": 0.25,
+    "total_test": 1280,
+    "n_correct": 1273,
     "clean_acc": 99.453125,
     "fgsm_acc": 15.9375,
     "ifgsm_acc": 0.0,
     "fgsm_drop": 83.515625,
-    "ifgsm_drop": 99.453125
+    "ifgsm_drop": 99.453125,
+    "fgsm_asr": 83.97486252945798,
+    "ifgsm_asr": 100.0,
+    "fgsm_time_s": 2.941,
+    "ifgsm_time_s": 133.03
   },
   {
     "epsilon": 0.3,
+    "total_test": 1280,
+    "n_correct": 1273,
     "clean_acc": 99.453125,
     "fgsm_acc": 11.171875,
     "ifgsm_acc": 0.0,
     "fgsm_drop": 88.28125,
-    "ifgsm_drop": 99.453125
+    "ifgsm_drop": 99.453125,
+    "fgsm_asr": 88.76669285153181,
+    "ifgsm_asr": 100.0,
+    "fgsm_time_s": 2.905,
+    "ifgsm_time_s": 134.851
   }
 ]
