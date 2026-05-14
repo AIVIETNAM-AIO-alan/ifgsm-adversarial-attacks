@@ -65,14 +65,16 @@ def main():
 
     exps_to_run = args.exp if args.exp else [1, 2, 3]
 
-    from experiments.exp1_epsilon   import run as run_exp1
-    from experiments.exp2_steps     import run as run_exp2
-    from experiments.exp3_visualize import run as run_exp3
+    from experiments.exp1_epsilon    import run as run_exp1
+    from experiments.exp2_steps      import run as run_exp2
+    from experiments.exp3_visualize  import run as run_exp3
+    from experiments.exp4_presentation import run as run_exp4
 
     exp_map = {
-        1: ("Exp1 — Accuracy vs Epsilon",           run_exp1),
-        2: ("Exp2 — Accuracy vs Num Steps",          run_exp2),
-        3: ("Exp3 — Visualize Adversarial Examples", run_exp3),
+        1: ("Exp1 — Accuracy vs Epsilon",              run_exp1),
+        2: ("Exp2 — Accuracy vs Num Steps",             run_exp2),
+        3: ("Exp3 — Visualize Adversarial Examples",    run_exp3),
+        4: ("Exp4 — Presentation Grid (ε & T sweep)",  run_exp4),
     }
 
     # ── Tạo thư mục output ────────────────────────────────────
