@@ -147,14 +147,14 @@ def run(config_path: str = "../configs/config.yaml", dataset: str = None, model:
         num_steps   = num_steps,
         class_names = class_names,
         dataset_name= ds_name,
-        save_path   = os.path.join(fig_dir, f"exp3_examples_{ds_name.lower()}.png"),
+        save_path   = os.path.join(fig_dir, f"exp3_examples_{ckpt_tag}.png"),
     )
 
     # ── Vẽ loss evolution ──────────────────────────────────────
     plot_loss_evolution(
         loss_history = attacker.last_stats["loss_history"],
         epsilon      = epsilon,
-        save_path    = os.path.join(fig_dir, f"exp3_loss_evolution_{ds_name.lower()}.png"),
+        save_path    = os.path.join(fig_dir, f"exp3_loss_evolution_{ckpt_tag}.png"),
     )
 
     # ── Vẽ xác suất dự đoán trước/sau tấn công ────────────────
@@ -166,7 +166,7 @@ def run(config_path: str = "../configs/config.yaml", dataset: str = None, model:
         class_names  = class_names,
         dataset_name = ds_name,
         n_cols       = n_show,
-        save_path    = os.path.join(fig_dir, f"exp3_pred_probs_{ds_name.lower()}.png"),
+        save_path    = os.path.join(fig_dir, f"exp3_pred_probs_{ckpt_tag}.png"),
     )
 
     print(f"\n[Exp3 — {ds_name}] Hoàn tất!")

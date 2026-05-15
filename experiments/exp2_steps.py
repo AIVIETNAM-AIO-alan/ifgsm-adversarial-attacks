@@ -98,7 +98,7 @@ def run(config_path: str = "../configs/config.yaml", dataset: str = None, model:
     # ── Lưu kết quả ──────────────────────────────────────────
     log_dir = os.path.join(ROOT, "results", "logs")
     os.makedirs(log_dir, exist_ok=True)
-    log_path = os.path.join(log_dir, f"exp2_steps_{ds_name.lower()}.json")
+    log_path = os.path.join(log_dir, f"exp2_steps_{ckpt_tag}.json")
     with open(log_path, "w") as f:
         json.dump(results, f, indent=2)
     print(f"  Saved log: {log_path}")
@@ -110,7 +110,7 @@ def run(config_path: str = "../configs/config.yaml", dataset: str = None, model:
         results,
         epsilon      = epsilon,
         dataset_name = ds_name,
-        save_path    = os.path.join(fig_dir, f"exp2_acc_vs_steps_{ds_name.lower()}.png"),
+        save_path    = os.path.join(fig_dir, f"exp2_acc_vs_steps_{ckpt_tag}.png"),
     )
 
     print(f"\n[Exp2 — {ds_name}] Hoàn tất!")
