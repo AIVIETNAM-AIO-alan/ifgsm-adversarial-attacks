@@ -1,6 +1,6 @@
 # I-FGSM Adversarial Attack — Image Classifier
 
-Implementation of **FGSM** and **I-FGSM (Iterative Fast Gradient Sign Method)** adversarial attacks on image classifiers, supporting **MNIST**, **CIFAR-10**, and **ImageNette** (pretrained ResNet-18 & MobileNetV2), with full training, evaluation, and visualization pipelines.
+Implementation of **FGSM** and **I-FGSM (Iterative Fast Gradient Sign Method)** adversarial attacks on image classifiers, supporting **MNIST**, **CIFAR-10**, and **ImageNette** (pretrained ResNet-18 & MobileNetV2), with full training, evaluation, visualization pipelines, and a **cross-architecture transfer attack experiment** across SimpleCNN, ResNet-18, and MobileNetV2.
 
 > Paper: *Adversarial Examples in the Physical World* — Kurakin, Goodfellow & Bengio (2016)
 > https://arxiv.org/abs/1607.02533
@@ -27,6 +27,17 @@ Implementation of **FGSM** and **I-FGSM (Iterative Fast Gradient Sign Method)** 
 - [Configuration](#configuration)
 - [Testing](#testing)
 - [References](#references)
+
+---
+
+## Quick Results
+
+| | MNIST | CIFAR-10 (SimpleCNN) | CIFAR-10 Transfer (ε=0.20) |
+|---|---|---|---|
+| Clean accuracy | 99.45% | 76.02% | — |
+| FGSM ASR (ε=0.20) | 74.7% | 84.2% | 64–76% (black-box) |
+| I-FGSM ASR (ε=0.20) | 100.0% | 98.9% | 67–90% (black-box) |
+| Steps to converge | ~40 | ~5 | — |
 
 ---
 
@@ -109,7 +120,7 @@ ifgsm_project/
 │   ├── resnet.py             # ResNet-18: small-image (scratch) + ImageNette (pretrained)
 │   ├── mobilenet.py          # MobileNetV2: pretrained ImageNet, fine-tune for ImageNette
 │   └── __init__.py           # Exports: SimpleCNN, get_resnet18, get_resnet18_imagenette,
-│                             #          get_mobilenetv2_imagenette
+│                             #          get_mobilenetv2_imagenette, get_mobilenetv2_cifar10
 │
 ├── utils/
 │   ├── data_loader.py        # MNIST / CIFAR-10 / ImageNette dataloaders + transforms
@@ -130,7 +141,8 @@ ifgsm_project/
 │   ├── exp1_epsilon.py       # Sweep ε → accuracy + ASR + timing  (FGSM & I-FGSM)
 │   ├── exp2_steps.py         # Sweep T → accuracy + ASR           (I-FGSM, steps_epsilon)
 │   ├── exp3_visualize.py     # Images + perturbation + prediction probability charts
-│   └── exp4_presentation.py  # Presentation grids: ε-sweep & T-sweep side-by-side
+│   ├── exp4_presentation.py  # Presentation grids: ε-sweep & T-sweep side-by-side
+│   └── exp5_transfer.py      # Cross-architecture transfer attack  (CIFAR-10, 3×3 matrix)
 │
 ├── configs/
 │   └── config.yaml           # All hyperparameters in one place
@@ -145,6 +157,7 @@ ifgsm_project/
 │
 ├── train.py                  # Standalone training script
 ├── main.py                   # Full pipeline: train → exp1 → exp2 → exp3
+├── generate_report.py        # Builds BaoCao_FGSM_IFGSM.docx from all experiment results
 └── requirements.txt
 ```
 
@@ -228,7 +241,10 @@ The attack code (`fgsm.py`, `ifgsm.py`) handles both scalar and tensor clip boun
 | SimpleCNN | ✓ (default) | ✓ (default) | ✗ (too small for 224×224) |
 | ResNet-18 (scratch) | ✓ | ✓ | ✗ |
 | ResNet-18 (pretrained) | ✗ | ✗ | ✓ (default) |
+| MobileNetV2 (CIFAR-10) | ✗ | ✓ (Exp5) | ✗ |
 | MobileNetV2 (pretrained) | ✗ | ✗ | ✓ |
+
+> ResNet-18 (scratch) and MobileNetV2 (CIFAR-10) are used together with SimpleCNN in **Exp 5** to build a 3-model cross-architecture transfer attack matrix.
 
 ### SimpleCNN
 
@@ -296,12 +312,14 @@ model = get_mobilenetv2_imagenette(num_classes=10)
 | Inference speed | Faster | Slower |
 | Best for | Speed-constrained deployment | Baseline research |
 
-**Checkpoint filenames** — ImageNette models are saved separately to avoid conflicts:
+**Checkpoint filenames:**
 
 | Dataset + Model | Checkpoint file |
 |---|---|
-| MNIST (any model) | `results/checkpoints/mnist_best.pth` |
-| CIFAR-10 (any model) | `results/checkpoints/cifar10_best.pth` |
+| MNIST + SimpleCNN | `results/checkpoints/mnist_best.pth` |
+| CIFAR-10 + SimpleCNN | `results/checkpoints/cifar10_best.pth` |
+| CIFAR-10 + ResNet-18 | `results/checkpoints/cifar10_resnet18_best.pth` |
+| CIFAR-10 + MobileNetV2 | `results/checkpoints/cifar10_mobilenetv2_best.pth` |
 | ImageNette + ResNet-18 | `results/checkpoints/imagenette_resnet18_best.pth` |
 | ImageNette + MobileNetV2 | `results/checkpoints/imagenette_mobilenetv2_best.pth` |
 
@@ -368,7 +386,24 @@ python -c "from experiments.exp3_visualize import run; run('configs/config.yaml'
 python -c "from experiments.exp4_presentation import run; run('configs/config.yaml', dataset='MNIST')"
 python -c "from experiments.exp4_presentation import run; run('configs/config.yaml', dataset='CIFAR10')"
 python -c "from experiments.exp4_presentation import run; run('configs/config.yaml', dataset='ImageNette', model='MobileNetV2')"
+
+# Exp5 — cross-architecture transfer attack (CIFAR-10, requires all 3 checkpoints)
+python experiments/exp5_transfer.py
 ```
+
+> **Exp5 prerequisites:** train all three CIFAR-10 models first.
+> ```bash
+> python train.py --dataset CIFAR10                        # SimpleCNN
+> python train.py --dataset CIFAR10 --model ResNet18       # ResNet-18
+> python train.py --dataset CIFAR10 --model MobileNetV2    # MobileNetV2
+> ```
+> Or chain everything in one command:
+> ```bash
+> python train.py --dataset CIFAR10 && \
+> python train.py --dataset CIFAR10 --model ResNet18 && \
+> python train.py --dataset CIFAR10 --model MobileNetV2 && \
+> python experiments/exp5_transfer.py
+> ```
 
 ### Run unit tests
 
@@ -477,6 +512,33 @@ The `Trainer` class handles the full training loop:
 | Epochs | 20 |
 | Batch size | 64 |
 | Augmentation | RandomCrop(32, padding=4) + RandomHorizontalFlip |
+| **Test accuracy** | **76.02%** |
+
+### CIFAR-10 — ResNet-18 (scratch)
+
+| Setting | Value |
+|---|---|
+| Split | 45,000 / 5,000 / 10,000 |
+| Model | ResNet-18 (small-image adapted: 3×3 stem, no maxpool) |
+| Optimizer | Adam (lr=0.001, wd=1e-4) |
+| Epochs | 20 |
+| Batch size | 64 |
+| Augmentation | RandomCrop(32, padding=4) + RandomHorizontalFlip |
+| **Val accuracy** | **81.86%** |
+| **Test accuracy** | **82.00%** |
+
+### CIFAR-10 — MobileNetV2 (scratch)
+
+| Setting | Value |
+|---|---|
+| Split | 45,000 / 5,000 / 10,000 |
+| Model | MobileNetV2 (adapted for 32×32 input) |
+| Optimizer | Adam (lr=0.001, wd=1e-4) |
+| Epochs | 20 |
+| Batch size | 64 |
+| Augmentation | RandomCrop(32, padding=4) + RandomHorizontalFlip |
+| **Val accuracy** | **84.12%** |
+| **Test accuracy** | **84.42%** |
 
 ### ImageNette — ResNet-18 (pretrained)
 
@@ -514,7 +576,7 @@ Training history (loss and accuracy curves):
 
 ## Experiments
 
-Three experiments are provided, each callable independently or through `main.py`.
+Five experiments are provided. Exp 1–4 run through `main.py`; Exp 5 is a standalone script.
 
 ### Exp 1 — Accuracy & ASR vs Epsilon
 
@@ -604,6 +666,37 @@ Images are automatically denormalized to `[0, 1]` for display regardless of data
 
 ---
 
+### Exp 5 — Cross-Architecture Transfer Attack
+
+**File:** `experiments/exp5_transfer.py`
+
+Evaluates whether adversarial examples generated on one model (source) fool a completely different architecture (target) — a **black-box transfer attack** scenario.
+
+**Setup:** three CIFAR-10 models form a 3×3 attack matrix.
+
+| Role | When source == target | When source ≠ target |
+|---|---|---|
+| **White-box (WB)** | Attacker knows model weights | — |
+| **Transfer (black-box)** | — | Attacker uses a surrogate model |
+
+**Flow:**
+1. Load all available CIFAR-10 checkpoints (SimpleCNN, ResNet18, MobileNetV2)
+2. For each source model and each ε in `epsilon_list`: generate FGSM + I-FGSM adversarial examples on correctly classified samples
+3. Evaluate those adversarial examples on **every** target model
+4. Build N×N ASR matrix; plot heatmap (at representative ε) + ASR-vs-ε line chart
+
+**Attack parameters:** `epsilon_list = [0.05, 0.10, 0.15, 0.20, 0.25, 0.30]`, `num_steps = 40`
+
+**Output files:**
+
+| Type | Path |
+|---|---|
+| JSON log | `results/logs/exp5_transfer_cifar10.json` |
+| Heatmap | `results/figures/exp5_transfer_heatmap_eps{ε}.png` |
+| Line chart | `results/figures/exp5_transfer_asr_vs_epsilon.png` |
+
+---
+
 ## Experiment Results
 
 > All results use the **2-phase evaluation**: attacks are applied only to the correctly classified subset.
@@ -611,7 +704,7 @@ Images are automatically denormalized to `[0, 1]` for display regardless of data
 
 ### Dataset comparison summary
 
-| | MNIST | CIFAR-10 |
+| | MNIST | CIFAR-10 (SimpleCNN) |
 |---|---|---|
 | Model | SimpleCNN | SimpleCNN |
 | Clean accuracy | 99.45% | 76.02% |
@@ -753,6 +846,46 @@ Before attack the model assigns ~100% confidence to the correct class. After, th
 
 ---
 
+### Exp 5 — Cross-Architecture Transfer Attack Results
+
+**CIFAR-10 clean accuracy by model:**
+
+| Model | Test Accuracy |
+|---|---|
+| SimpleCNN | 76.02% |
+| ResNet-18 | 82.00% |
+| MobileNetV2 | 84.42% |
+
+**ASR matrix at ε=0.20** — rows = source (generates adversarial examples), columns = target (evaluated on):
+
+*FGSM:*
+
+| Source \ Target | SimpleCNN | ResNet-18 | MobileNetV2 |
+|---|---|---|---|
+| **SimpleCNN** | **84.2% (WB)** | 64.1% | 73.8% |
+| **ResNet-18** | 75.6% | **89.5% (WB)** | 75.3% |
+| **MobileNetV2** | 74.6% | 63.9% | **81.3% (WB)** |
+
+*I-FGSM (T=40):*
+
+| Source \ Target | SimpleCNN | ResNet-18 | MobileNetV2 |
+|---|---|---|---|
+| **SimpleCNN** | **98.9% (WB)** | 67.8% | 90.4% |
+| **ResNet-18** | 83.3% | **98.7% (WB)** | 87.9% |
+| **MobileNetV2** | 81.8% | 66.7% | **99.3% (WB)** |
+
+**Key takeaways:**
+- White-box ASR is uniformly 98–99% for I-FGSM — all three architectures are highly vulnerable.
+- Transfer (black-box) I-FGSM ASR ranges **67–90%**: a real threat even without model access.
+- `SimpleCNN → MobileNetV2` achieves the highest transfer rate (90.4%); `MobileNetV2 → ResNet-18` the lowest (66.7%) due to the larger architectural gap (depthwise conv vs. residual blocks).
+- FGSM transfer rates are more uniform (64–76%) than I-FGSM, suggesting single-step perturbations find more architecture-agnostic directions.
+
+![Exp5 Transfer Heatmap](results/figures/exp5_transfer_heatmap_eps0.2.png)
+
+![Exp5 ASR vs Epsilon](results/figures/exp5_transfer_asr_vs_epsilon.png)
+
+---
+
 ## Configuration
 
 All hyperparameters are in `configs/config.yaml`. CLI flags override values without modifying the file.
@@ -848,4 +981,5 @@ python -m pytest tests/ -v
 | PGD — Madry et al. (2018) | https://arxiv.org/abs/1706.06083 |
 | MI-FGSM — Dong et al. (2018) | https://arxiv.org/abs/1710.06081 |
 | DI-FGSM — Xie et al. (2019) | https://arxiv.org/abs/1803.06978 |
+| Transferability — Papernot et al. (2016) | https://arxiv.org/abs/1605.07277 |
 | MobileNetV2 — Sandler et al. (2018) | https://arxiv.org/abs/1801.04381 |
