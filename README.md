@@ -181,6 +181,30 @@ pip install -r requirements.txt
 
 **Requirements:** Python 3.10+, PyTorch 2.0+, torchvision, matplotlib, tqdm, pyyaml.
 
+### Download pretrained checkpoints
+
+Model checkpoints are hosted on [GitHub Releases](https://github.com/wotttoo/ifgsm-adversarial-attacks/releases/tag/v1.0) (not included in the repo due to file size).
+
+**Option A — using `gh` CLI:**
+```bash
+gh release download v1.0 --dir results/checkpoints/
+```
+
+**Option B — using `wget`:**
+```bash
+mkdir -p results/checkpoints
+BASE=https://github.com/wotttoo/ifgsm-adversarial-attacks/releases/download/v1.0
+wget -P results/checkpoints/ \
+  $BASE/mnist_best.pth \
+  $BASE/cifar10_best.pth \
+  $BASE/cifar10_resnet18_best.pth \
+  $BASE/cifar10_mobilenetv2_best.pth \
+  $BASE/imagenette_resnet18_best.pth \
+  $BASE/imagenette_mobilenetv2_best.pth
+```
+
+After downloading, you can skip training and run experiments directly with `--skip-train`.
+
 ---
 
 ## Datasets
