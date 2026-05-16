@@ -1,0 +1,42 @@
+[
+  {
+    "num_steps": 5,
+    "total_test": 1280,
+    "n_correct": 1238,
+    "clean_acc": 96.71875,
+    "adv_acc": 0.0,
+    "acc_drop": 96.71875,
+    "asr": 100.0,
+    "attack_time_s": 448.232
+  },
+  {
+    "num_steps": 10,
+    "total_test": 1280,
+    "n_correct": 1238,
+    "clean_acc": 96.71875,
+    "adv_acc": 0.0,
+    "acc_drop": 96.71875,
+    "asr": 100.0,
+    "attack_time_s": 899.603
+  },
+  {
+    "num_steps": 20,
+    "total_test": 1280,
+    "n_correct": 1238,
+    "clean_acc": 96.71875,
+    "adv_acc": 0.0,
+    "acc_drop": 96.71875,
+    "asr": 100.0,
+    "attack_time_s": 1799.44
+  },
+  {
+    "num_steps": 40,
+    "total_test": 1280,
+    "n_correct": 1238,
+    "clean_acc": 96.71875,
+    "adv_acc": 0.0,
+    "acc_drop": 96.71875,
+    "asr": 100.0,
+    "attack_time_s": 3600.501
+  }
+]
